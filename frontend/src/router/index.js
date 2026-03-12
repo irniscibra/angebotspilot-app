@@ -28,7 +28,7 @@ const routes = [
       {path: 'protokolle',name: 'protokolle',component: () => import('pages/AcceptanceProtocolPage.vue')},
       {path: 'protokolle/neu/:quoteId',name: 'protokoll-neu',component: () => import('pages/AcceptanceProtocolPage.vue'),props: true},
       {path: 'invoices',name: 'invoices',component: () => import('pages/InvoicesListPage.vue')},
-      { path: 'invoices/:id',name: 'invoice-detail',component: () => import('pages/InvoiceDetailPage.vue')}
+      { path: 'invoices/:id',name: 'invoice-detail',component: () => import('src/pages/InvoiceDetailPage.vue')}
     ],
   },
   {
