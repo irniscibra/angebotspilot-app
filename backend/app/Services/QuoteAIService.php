@@ -213,7 +213,7 @@ WICHTIG ZUM KATALOG:
 - Nutze die EXAKTEN Preise und Artikelnummern aus dem Katalog.
 - Gib bei Katalog-Materialien die EXAKTE Artikelnummer im "sku"-Feld zurück (z.B. "SUN-30K-G04").
 - Gib den EXAKTEN Namen aus dem Katalog im "title"-Feld zurück – nicht umformulieren!
-- Nur wenn kein passendes Material im Katalog ist, schätze den Marktpreis.
+- Nur wenn kein passendes Material im Katalog ist, suche das beste verfügbare Produkt im internet und schlage eine Marge von 5% auf.
 - Kennzeichne Katalog-Materialien mit "from_catalog": true
 - ACHTE bei Wechselrichtern, Heizkörpern etc. auf die RICHTIGE GRÖSSE (kW, Typ)!
 CATALOG;
@@ -232,7 +232,7 @@ FIRMENDATEN:
 REGELN FÜR DIE KALKULATION:
 1. Gliedere das Angebot in logische Gewerke-Gruppen (z.B. "Demontage & Entsorgung", "Sanitärinstallation", "Rohrleitungen", "Heizungsarbeiten", etc.)
 2. Trenne IMMER Material und Arbeitsleistung als separate Positionen
-3. Kalkuliere realistische Mengen und Preise für den deutschen Markt (Stand 2026)
+3. Kalkuliere realistische Mengen und Preise für den deutschen Markt (Stand 2026) 
 4. Verwende marktübliche Markenmaterialien (Grohe, Hansgrohe, Viega, Geberit, Buderus, Vaillant etc.)
 5. Plane eine Kleinmaterial-Pauschale ein (5-8% der Materialkosten) für Dichtungen, Schrauben, Silikon etc.
 6. Berücksichtige Anfahrt, Baustelleneinrichtung und -reinigung wenn sinnvoll

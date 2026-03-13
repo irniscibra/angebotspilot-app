@@ -11,6 +11,8 @@ use App\Http\Controllers\Api\DatanormController;
 use App\Http\Controllers\Api\ServiceTemplateController;
 use App\Http\Controllers\Api\AcceptanceProtocolController;
 use App\Http\Controllers\Api\InvoiceController;
+use App\Http\Controllers\Api\DashboardController;
+
 /*
 |--------------------------------------------------------------------------
 | API Routes – AngebotsPilot
@@ -116,23 +118,25 @@ Route::get('quotes/{quote}/pdf', [PdfController::class, 'generate']);
 Route::get('quotes/{quote}/pdf/preview', [PdfController::class, 'preview']);
 
     // Dashboard Stats
-    Route::get('dashboard/stats', function (\Illuminate\Http\Request $request) {
-        $company = $request->user()->company;
+    // Route::get('dashboard/stats', function (\Illuminate\Http\Request $request) {
+    //     $company = $request->user()->company;
 
-        return response()->json([
-            'quotes_total' => $company->quotes()->count(),
-            'quotes_draft' => $company->quotes()->where('status', 'draft')->count(),
-            'quotes_sent' => $company->quotes()->where('status', 'sent')->count(),
-            'quotes_accepted' => $company->quotes()->where('status', 'accepted')->count(),
-            'quotes_this_month' => $company->quotes()->whereMonth('created_at', now()->month)->count(),
-            'revenue_accepted' => $company->quotes()->where('status', 'accepted')->sum('total_gross'),
-            'conversion_rate' => $company->quotes()->whereIn('status', ['sent', 'viewed', 'accepted', 'rejected'])->count() > 0
-                ? round(
-                    $company->quotes()->where('status', 'accepted')->count() /
-                    $company->quotes()->whereIn('status', ['sent', 'viewed', 'accepted', 'rejected'])->count() * 100,
-                    1
-                )
-                : 0,
-        ]);
-    });
+    //     return response()->json([
+    //         'quotes_total' => $company->quotes()->count(),
+    //         'quotes_draft' => $company->quotes()->where('status', 'draft')->count(),
+    //         'quotes_sent' => $company->quotes()->where('status', 'sent')->count(),
+    //         'quotes_accepted' => $company->quotes()->where('status', 'accepted')->count(),
+    //         'quotes_this_month' => $company->quotes()->whereMonth('created_at', now()->month)->count(),
+    //         'revenue_accepted' => $company->quotes()->where('status', 'accepted')->sum('total_gross'),
+    //         'conversion_rate' => $company->quotes()->whereIn('status', ['sent', 'viewed', 'accepted', 'rejected'])->count() > 0
+    //             ? round(
+    //                 $company->quotes()->where('status', 'accepted')->count() /
+    //                 $company->quotes()->whereIn('status', ['sent', 'viewed', 'accepted', 'rejected'])->count() * 100,
+    //                 1
+    //             )
+    //             : 0,
+    //     ]);
+    // });
+
+    Route::get('dashboard', [DashboardController::class, 'index']);
 });
