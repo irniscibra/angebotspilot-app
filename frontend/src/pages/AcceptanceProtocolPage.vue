@@ -788,7 +788,7 @@ export default {
     const onExportPdf = () => {
       const t = localStorage.getItem("auth_token");
       window.open(
-        `http://localhost:8000/api/acceptance-protocols/${currentProtocol.value.id}/pdf?token=${t}`,
+        `/api/acceptance-protocols/${currentProtocol.value.id}/pdf?token=${t}`,
         "_blank",
       );
     };

@@ -567,7 +567,7 @@ export default {
           if (c[k] !== null && c[k] !== undefined) form[k] = c[k];
         });
         if (c.logo_path)
-          logoPreview.value = `http://localhost:8000/storage/${c.logo_path}`;
+          logoPreview.value = `/storage/${c.logo_path}`;
       } catch (e) {
         console.error(e);
       } finally {

@@ -1476,7 +1476,7 @@ export default {
     const onExportPdf = () => {
       const t = localStorage.getItem("auth_token");
       window.open(
-        `http://localhost:8000/api/quotes/${quote.value.id}/pdf?token=${t}`,
+        `/api/quotes/${quote.value.id}/pdf?token=${t}`,
         "_blank",
       );
     };

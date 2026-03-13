@@ -858,7 +858,8 @@ export default {
     const onExportPdf = () => {
       const t = localStorage.getItem("auth_token");
       window.open(
-        `http://localhost:8000/api/invoices/${invoice.value.id}/pdf?token=${t}`,
+        
+        `/api/invoices/${invoice.value.id}/pdf?token=${t}`,
         "_blank",
       );
     };
