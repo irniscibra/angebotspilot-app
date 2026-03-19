@@ -44,7 +44,7 @@
           </h5>
         </div>
       <div class="q-gutter-sm">
-  <q-btn v-if="quote.status === 'draft'" color="green" icon="send" label="Versenden" no-caps @click="onSend" />
+  <q-btn color="green" icon="send" label="Versenden" no-caps @click="showSendDialog = true" />
   <q-btn color="primary" icon="picture_as_pdf" label="PDF" no-caps @click="onExportPdf" />
   <q-btn round flat icon="more_vert" color="grey-7">
     <q-menu auto-close style="min-width: 220px; border-radius: 12px;">
@@ -1076,6 +1076,11 @@
         </q-card-actions>
       </q-card>
     </q-dialog>
+    <SendQuoteDialog
+  v-model="showSendDialog"
+  :quote="quote"
+  @sent="(q) => { quote = q; }"
+/>
   </q-page>
 </template>
 
@@ -1085,15 +1090,16 @@ import { useRoute, useRouter } from "vue-router";
 import { useQuoteStore } from "src/stores/quotes";
 import { useQuasar } from "quasar";
 import { api } from "src/boot/axios";
-
+import SendQuoteDialog from 'src/components/SendQuoteDialog.vue'
 export default {
   name: "QuoteDetailPage",
+  components: { SendQuoteDialog },
   setup() {
     const route = useRoute();
     const router = useRouter();
     const quoteStore = useQuoteStore();
     const $q = useQuasar();
-
+const showSendDialog = ref(false)
     // State
     const loading = ref(true);
     const quote = ref(null);
@@ -1531,6 +1537,7 @@ export default {
       openTemplateDialog,
       onApplyTemplate,
       onSaveAsTemplate,
+      showSendDialog
     };
   },
 };

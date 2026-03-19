@@ -3,11 +3,15 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Mail\QuoteMail;
 use App\Models\Quote;
 use App\Models\QuoteItem;
 use App\Services\QuoteAIService;
+use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Mail;
 
 class QuoteController extends Controller
 {
@@ -243,20 +247,91 @@ class QuoteController extends Controller
     /**
      * Angebot senden (Status auf "sent").
      */
-    public function send(Request $request, Quote $quote): JsonResponse
+public function send(Request $request, Quote $quote): JsonResponse
     {
         $this->authorizeQuote($request, $quote);
-
-        $quote->markAsSent();
-
-        // TODO: E-Mail an Kunden senden (später via n8n oder Laravel Mail)
-
-        return response()->json([
-            'message' => 'Angebot wurde versendet.',
-            'quote' => $quote->fresh(),
+ 
+        $request->validate([
+            'recipient_email' => 'required|email',
+            'recipient_name' => 'required|string|max:255',
+            'subject' => 'nullable|string|max:500',
+            'message' => 'nullable|string|max:5000',
         ]);
+ 
+        // Quote mit allen Relations laden
+        $quote->load(['company', 'customer', 'items', 'creator']);
+ 
+        // PDF generieren
+        $groupedItems = $quote->items->groupBy('group_name');
+        $pdf = Pdf::loadView('pdf.quote', [
+            'quote' => $quote,
+            'company' => $quote->company,
+            'customer' => $quote->customer,
+            'groupedItems' => $groupedItems,
+            'creator' => $quote->creator,
+        ]);
+        $pdf->setPaper('a4', 'portrait');
+        $pdf->setOption('defaultFont', 'DejaVu Sans');
+        $pdf->setOption('isRemoteEnabled', true);
+        $pdf->setOption('isHtml5ParserEnabled', true);
+ 
+        $pdfContent = $pdf->output();
+        $pdfFilename = $quote->quote_number . '.pdf';
+ 
+        // Absender-Info
+        $user = $request->user();
+        $company = $quote->company;
+        $senderName = $user->name;
+        $replyToEmail = $company->email ?? $user->email;
+ 
+        try {
+            // E-Mail senden
+            Mail::to($request->recipient_email)
+                ->send(new QuoteMail(
+                    quote: $quote,
+                    recipientName: $request->recipient_name,
+                    senderName: $senderName,
+                    customMessage: $request->message,
+                    replyToEmail: $replyToEmail,
+                    pdfContent: $pdfContent,
+                    pdfFilename: $pdfFilename,
+                ));
+ 
+            // Status auf "sent" setzen
+            $quote->markAsSent();
+ 
+            // PDF lokal speichern
+            $storagePath = 'angebote/' . $company->id . '/' . $pdfFilename;
+            \Illuminate\Support\Facades\Storage::disk('local')->put($storagePath, $pdfContent);
+            $quote->update([
+                'pdf_path' => $storagePath,
+                'pdf_generated_at' => now(),
+            ]);
+ 
+            Log::info("Angebot versendet", [
+                'quote_id' => $quote->id,
+                'quote_number' => $quote->quote_number,
+                'recipient' => $request->recipient_email,
+                'sender' => $replyToEmail,
+            ]);
+ 
+            return response()->json([
+                'message' => 'Angebot wurde erfolgreich per E-Mail versendet.',
+                'quote' => $quote->fresh()->load(['customer', 'items']),
+            ]);
+ 
+        } catch (\Exception $e) {
+            Log::error("E-Mail-Versand fehlgeschlagen", [
+                'quote_id' => $quote->id,
+                'error' => $e->getMessage(),
+            ]);
+ 
+            return response()->json([
+                'message' => 'E-Mail konnte nicht gesendet werden: ' . $e->getMessage(),
+            ], 500);
+        }
     }
-
+ 
     /**
      * Angebot duplizieren.
      */
