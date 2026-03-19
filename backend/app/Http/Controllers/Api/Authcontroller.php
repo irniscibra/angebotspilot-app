@@ -18,11 +18,21 @@ class AuthController extends Controller
     public function register(Request $request): JsonResponse
     {
         $request->validate([
+            'invite_code' => 'required|string',
             'name' => 'required|string|max:255',
             'email' => 'required|string|email|max:255|unique:users',
             'password' => ['required', 'confirmed', Rules\Password::defaults()],
             'company_name' => 'required|string|max:255',
         ]);
+
+                // Einladungscode prüfen
+        if ($request->invite_code !== env('INVITE_CODE', 'PILOT2026')) {
+            return response()->json([
+                'message' => 'Ungültiger Einladungscode.',
+                'errors' => ['invite_code' => ['Der Einladungscode ist ungültig.']],
+            ], 422);
+        }
+
 
         // Firma erstellen
         $company = Company::create([

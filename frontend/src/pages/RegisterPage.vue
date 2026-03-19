@@ -43,6 +43,14 @@
                 ><q-icon name="person" color="grey-5"
               /></template>
             </q-input>
+             <q-input
+              v-model="inviteCode"
+              filled
+              label="Einladungscode"
+              :rules="[(val) => !!val || 'Einladungscode ist erforderlich']"
+            >
+              <template v-slot:prepend><q-icon name="vpn_key" color="grey-5" /></template>
+            </q-input>
             <q-input
               v-model="companyName"
               filled
@@ -124,6 +132,7 @@ export default {
     const router = useRouter();
     const $q = useQuasar();
     const name = ref("");
+    const inviteCode = ref("");
     const companyName = ref("");
     const email = ref("");
     const password = ref("");
@@ -134,6 +143,7 @@ export default {
       try {
         await authStore.register({
           name: name.value,
+          invite_code: inviteCode.value,
           company_name: companyName.value,
           email: email.value,
           password: password.value,
@@ -151,6 +161,7 @@ export default {
     };
     return {
       name,
+      inviteCode,
       companyName,
       email,
       password,

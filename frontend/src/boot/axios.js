@@ -2,7 +2,7 @@ import { boot } from 'quasar/wrappers'
 import axios from 'axios'
 
 const api = axios.create({
-  baseURL: '/api',
+  baseURL: window.location.hostname === 'localhost' ? 'http://localhost:8000/api' : '/api',
   headers: {
     'Content-Type': 'application/json',
     'Accept': 'application/json'
