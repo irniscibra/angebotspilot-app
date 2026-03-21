@@ -1,5 +1,14 @@
 <template>
   <q-layout view="lHh Lpr lff">
+     <!-- NEU: Mobile Header mit Hamburger -->
+    <q-header elevated class="bg-white text-dark" style="border-bottom: 1px solid #e2e8f0;" v-if="$q.screen.lt.lg">
+      <q-toolbar>
+        <q-btn flat round dense icon="menu" color="dark" @click="leftDrawerOpen = !leftDrawerOpen" />
+        <q-toolbar-title>
+          <img src="~assets/angebotspilot-logo.png" alt="AngebotsPilot" style="height: 36px; width: auto;" />
+        </q-toolbar-title>
+      </q-toolbar>
+    </q-header>
     <q-drawer v-model="leftDrawerOpen" show-if-above bordered :width="220"
       style="background: #ffffff; border-right: 1px solid #e2e8f0">
       <div style="
@@ -75,20 +84,17 @@ export default {
     const route = useRoute();
     const leftDrawerOpen = ref(true);
     const menuItems = [
-      { icon: "dashboard", label: "Dashboard", to: "/dashboard" },
-      { icon: "auto_awesome", label: "Neues Angebot", to: "/quotes/create" },
-      { icon: "description", label: "Angebote", to: "/quotes" },
-      { icon: "people", label: "Kunden", to: "/customers" },
-      { icon: "inventory_2", label: "Materialkatalog", to: "/materials" },
-      { icon: "content_paste", label: "Leistungsvorlagen", to: "/vorlagen" },
-      { icon: "settings", label: "Einstellungen", to: "/settings" },
-      {
-        icon: "upload_file",
-        label: "Datanorm Import",
-        to: { name: "datanorm" },
-      },
+      { label: 'Dashboard', icon: 'dashboard', to: '/dashboard' },
+      { label: 'Neues Angebot', icon: 'add_circle', to: '/quotes/create' },
+      { label: 'Angebote', icon: 'description', to: '/quotes' },
       { label: 'Rechnungen', icon: 'receipt_long', to: '/invoices' },
-    ];
+      { label: 'Protokolle', icon: 'assignment_turned_in', to: '/protokolle' },
+      { label: 'Kunden', icon: 'people', to: '/customers' },
+      { label: 'Materialkatalog', icon: 'inventory_2', to: '/materials' },
+      { label: 'Leistungsvorlagen', icon: 'content_paste', to: '/vorlagen' },
+      { label: 'Datanorm Import', icon: 'upload_file', to: '/datanorm' },
+      { label: 'Einstellungen', icon: 'settings', to: '/settings' },
+    ]
     const isActive = (to) =>
       route.path === to ||
       (route.path.startsWith(to + "/") &&

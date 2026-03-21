@@ -83,48 +83,25 @@
 
     <!-- Detail/Edit -->
     <div v-else>
-      <div class="row items-center q-mb-lg">
-        <q-btn
-          flat
-          round
-          icon="arrow_back"
-          color="grey-7"
-          @click="currentProtocol = null"
-          class="q-mr-sm"
-        />
-        <div class="col">
-          <div class="row items-center q-gutter-sm">
-            <h5 class="q-my-none" style="font-weight: 700; color: #0f172a">
-              {{ currentProtocol.project_title }}
-            </h5>
-            <q-badge
-              :color="statusColor(currentProtocol.status)"
-              :label="statusLabel(currentProtocol.status)"
-            />
-          </div>
-          <p class="q-mb-none q-mt-xs" style="color: #64748b">
-            {{ currentProtocol.protocol_number }}
-          </p>
-        </div>
-        <div class="q-gutter-sm">
-          <q-btn
-            outline
-            color="grey-7"
-            icon="save"
-            label="Speichern"
-            no-caps
-            @click="onSave"
-            :loading="saving"
-          />
-          <q-btn
-            color="primary"
-            icon="picture_as_pdf"
-            label="PDF"
-            no-caps
-            @click="onExportPdf"
-          />
-        </div>
-      </div>
+     <div class="q-mb-md">
+  <div class="row items-center no-wrap q-mb-xs">
+    <q-btn flat round icon="arrow_back" color="grey-7" @click="currentProtocol = null" class="q-mr-xs" />
+    <div class="row items-center q-gutter-xs">
+      <q-badge :color="statusColor(currentProtocol.status)" :label="statusLabel(currentProtocol.status)" />
+      <span style="font-size: 12px; color: #64748b">{{ currentProtocol.protocol_number }}</span>
+    </div>
+    <q-space />
+    <div class="row items-center q-gutter-xs">
+      <q-btn outline color="grey-7" icon="save" :label="$q.screen.gt.sm ? 'Speichern' : ''" no-caps dense @click="onSave" :loading="saving" />
+      <q-btn color="primary" icon="picture_as_pdf" :label="$q.screen.gt.sm ? 'PDF' : ''" no-caps dense @click="onExportPdf" />
+    </div>
+  </div>
+  <div class="q-pl-xs">
+    <h5 class="q-my-none" style="font-weight: 700; color: #0f172a; font-size: clamp(16px, 4vw, 22px);">
+      {{ currentProtocol.project_title }}
+    </h5>
+  </div>
+</div>
 
       <div class="row q-col-gutter-lg">
         <div class="col-12 col-md-8">
@@ -785,13 +762,14 @@ export default {
       }
     };
 
-    const onExportPdf = () => {
-      const t = localStorage.getItem("auth_token");
-      window.open(
-        `/api/acceptance-protocols/${currentProtocol.value.id}/pdf?token=${t}`,
-        "_blank",
-      );
-    };
+   const onExportPdf = () => {
+  const t = localStorage.getItem("auth_token");
+  const base = window.location.hostname === 'localhost' ? 'http://localhost:8000' : '';
+  window.open(
+    `${base}/api/acceptance-protocols/${currentProtocol.value.id}/pdf?token=${t}`,
+    "_blank",
+  );
+};
 
     // Defects
     const addDefect = () => {

@@ -1,21 +1,21 @@
 <template>
-  <q-page class="q-pa-lg" style="background: #f6f9fc">
+  <q-page class="q-pa-sm q-pa-md-lg" style="background: #f6f9fc">
     <div v-if="loading" class="flex flex-center q-pa-xl">
       <q-spinner-orbit color="primary" size="50px" />
     </div>
     <div v-else-if="invoice">
-      <!-- Header -->
-      <div class="row items-center q-mb-lg">
-        <q-btn
-          flat
-          round
-          icon="arrow_back"
-          color="grey-6"
-          class="q-mr-sm"
-          @click="$router.push('/invoices')"
-        />
-        <div class="col">
-          <div class="row items-center q-gutter-sm q-mb-xs">
+      <!-- HEADER – Mobile optimiert -->
+      <div class="q-mb-md">
+        <div class="row items-center no-wrap q-mb-xs">
+          <q-btn
+            flat
+            round
+            icon="arrow_back"
+            color="grey-6"
+            class="q-mr-xs"
+            @click="$router.push('/invoices')"
+          />
+          <div class="row items-center q-gutter-xs">
             <q-badge
               :color="statusColor(invoice.status)"
               :label="statusLabel(invoice.status)"
@@ -26,68 +26,82 @@
               :color="invoice.type === 'partial' ? 'orange' : 'purple'"
               :label="typeLabel(invoice.type)"
             />
-            <span style="font-size: 13px; color: #94a3b8">{{
+            <span style="font-size: 12px; color: #94a3b8">{{
               invoice.invoice_number
             }}</span>
           </div>
-          <h5 class="q-my-none" style="font-weight: 700; color: #0f172a">
+          <q-space />
+          <div class="row items-center q-gutter-xs">
+            <q-btn
+              v-if="invoice.status === 'draft'"
+              color="green"
+              icon="send"
+              :label="$q.screen.gt.sm ? 'Finalisieren' : ''"
+              no-caps
+              dense
+              @click="onSend"
+            />
+            <q-btn
+              v-if="invoice.status === 'sent'"
+              color="green"
+              icon="check"
+              :label="$q.screen.gt.sm ? 'Bezahlt' : ''"
+              no-caps
+              dense
+              @click="onMarkPaid"
+            />
+            <q-btn
+              color="primary"
+              icon="picture_as_pdf"
+              :label="$q.screen.gt.sm ? 'PDF' : ''"
+              no-caps
+              dense
+              @click="onExportPdf"
+            />
+            <q-btn round flat icon="more_vert" color="grey-7">
+              <q-menu auto-close style="min-width: 200px; border-radius: 12px">
+                <q-list>
+                  <q-item
+                    v-if="invoice.status !== 'cancelled'"
+                    clickable
+                    @click="onCancel"
+                  >
+                    <q-item-section avatar
+                      ><q-icon name="block" color="negative"
+                    /></q-item-section>
+                    <q-item-section class="text-negative"
+                      >Stornieren</q-item-section
+                    >
+                  </q-item>
+                  <q-item
+                    v-if="invoice.status === 'draft'"
+                    clickable
+                    @click="onDelete"
+                  >
+                    <q-item-section avatar
+                      ><q-icon name="delete" color="negative"
+                    /></q-item-section>
+                    <q-item-section class="text-negative"
+                      >Entwurf löschen</q-item-section
+                    >
+                  </q-item>
+                </q-list>
+              </q-menu>
+            </q-btn>
+          </div>
+        </div>
+        <!-- Titel eigene Zeile -->
+        <div class="q-pl-xs">
+          <h5
+            class="q-my-none"
+            style="
+              font-weight: 700;
+              color: #0f172a;
+              font-size: clamp(16px, 4vw, 22px);
+            "
+          >
             {{ invoice.project_title }}
           </h5>
-        </div>
-        <div class="q-gutter-sm">
-          <q-btn
-            v-if="invoice.status === 'draft'"
-            color="green"
-            icon="send"
-            label="Finalisieren"
-            no-caps
-            @click="onSend"
-          />
-          <q-btn
-            v-if="invoice.status === 'sent'"
-            color="green"
-            icon="check"
-            label="Bezahlt"
-            no-caps
-            @click="onMarkPaid"
-          />
-          <q-btn
-            color="primary"
-            icon="picture_as_pdf"
-            label="PDF"
-            no-caps
-            @click="onExportPdf"
-          />
-          <q-btn round flat icon="more_vert" color="grey-7">
-            <q-menu auto-close style="min-width: 200px; border-radius: 12px">
-              <q-list>
-                <q-item
-                  v-if="invoice.status !== 'cancelled'"
-                  clickable
-                  @click="onCancel"
-                >
-                  <q-item-section avatar
-                    ><q-icon name="block" color="negative"
-                  /></q-item-section>
-                  <q-item-section class="text-negative"
-                    >Stornieren</q-item-section
-                  >
-                </q-item>
-                <q-item
-                  v-if="invoice.status === 'draft'"
-                  clickable
-                  @click="onDelete"
-                >
-                  <q-item-section avatar
-                    ><q-icon name="delete" color="negative"
-                  /></q-item-section>
-                  <q-item-section class="text-negative"
-                    >Entwurf löschen</q-item-section
-                  >
-                </q-item>
-              </q-list>
-            </q-menu>
-          </q-btn>
         </div>
       </div>
 
@@ -334,12 +348,13 @@
                   flat
                   color="primary"
                   icon="add"
-                  label="Position hinzufügen"
+                  :label="$q.screen.gt.sm ? 'Position hinzufügen' : ''"
                   no-caps
                   dense
                   @click="openAddDialog"
                 />
               </div>
+
               <div
                 v-for="(items, groupName) in groupedItems"
                 :key="groupName"
@@ -368,8 +383,129 @@
                     border-radius: 10px;
                   "
                 >
-                  <q-card-section class="q-py-sm q-px-md">
-                    <div class="row items-center q-gutter-sm">
+                  <q-card-section class="q-py-sm q-px-sm">
+                    <!-- Mobile Layout -->
+                    <div v-if="$q.screen.lt.md">
+                      <div class="row items-start justify-between q-mb-xs">
+                        <div class="col">
+                          <span
+                            style="
+                              font-size: 13px;
+                              font-weight: 600;
+                              color: #0f172a;
+                            "
+                            >{{ item.title }}</span
+                          >
+                          <q-badge
+                            :color="
+                              item.type === 'material' ? 'blue' : 'orange'
+                            "
+                            :label="
+                              item.type === 'material' ? 'Material' : 'Arbeit'
+                            "
+                            dense
+                            class="q-ml-xs"
+                            style="font-size: 10px"
+                          />
+                          <div
+                            v-if="item.description"
+                            style="
+                              font-size: 11px;
+                              margin-top: 2px;
+                              color: #94a3b8;
+                            "
+                          >
+                            {{ item.description }}
+                          </div>
+                        </div>
+                        <q-btn
+                          v-if="invoice.status === 'draft'"
+                          flat
+                          round
+                          dense
+                          icon="close"
+                          color="negative"
+                          size="sm"
+                          @click="onDeleteItem(item)"
+                        />
+                      </div>
+                      <div class="row items-center q-gutter-sm">
+                        <div
+                          v-if="invoice.status === 'draft'"
+                          style="width: 70px"
+                        >
+                          <q-input
+                            :model-value="item.quantity"
+                            @change="
+                              (val) =>
+                                onUpdateItem(item, 'quantity', val.target.value)
+                            "
+                            dense
+                            filled
+                            type="number"
+                            step="0.5"
+                            style="font-size: 12px"
+                          />
+                        </div>
+                        <div
+                          v-else
+                          style="
+                            font-size: 13px;
+                            color: #475569;
+                            min-width: 30px;
+                          "
+                        >
+                          {{ item.quantity }}
+                        </div>
+                        <div
+                          style="
+                            font-size: 12px;
+                            color: #64748b;
+                            min-width: 30px;
+                          "
+                        >
+                          {{ item.unit }}
+                        </div>
+                        <div
+                          v-if="invoice.status === 'draft'"
+                          style="width: 85px"
+                        >
+                          <q-input
+                            :model-value="item.unit_price"
+                            @change="
+                              (val) =>
+                                onUpdateItem(
+                                  item,
+                                  'unit_price',
+                                  val.target.value,
+                                )
+                            "
+                            dense
+                            filled
+                            type="number"
+                            step="0.50"
+                            suffix="€"
+                            style="font-size: 12px"
+                          />
+                        </div>
+                        <div v-else style="font-size: 13px; color: #475569">
+                          {{ formatPrice(item.unit_price) }} €
+                        </div>
+                        <q-space />
+                        <div
+                          style="
+                            font-weight: 700;
+                            font-size: 14px;
+                            color: #1d4ed8;
+                          "
+                        >
+                          {{ formatPrice(item.quantity * item.unit_price) }} €
+                        </div>
+                      </div>
+                    </div>
+
+                    <!-- Desktop Layout -->
+                    <div v-else class="row items-center q-gutter-sm">
                       <div class="col">
                         <span
                           style="
@@ -584,9 +720,9 @@
       </div>
     </div>
 
-    <!-- Position hinzufügen Dialog -->
+    <!-- Dialog Position hinzufügen -->
     <q-dialog v-model="showAddDialog">
-      <q-card style="min-width: 450px; border-radius: 14px">
+      <q-card style="width: 95vw; max-width: 450px; border-radius: 14px">
         <q-card-section
           ><h6 class="q-my-none" style="font-weight: 600">
             Position hinzufügen
@@ -857,11 +993,7 @@ export default {
 
     const onExportPdf = () => {
       const t = localStorage.getItem("auth_token");
-      window.open(
-        
-        `/api/invoices/${invoice.value.id}/pdf?token=${t}`,
-        "_blank",
-      );
+      window.open(`/api/invoices/${invoice.value.id}/pdf?token=${t}`, "_blank");
     };
 
     const formatPrice = (val) =>

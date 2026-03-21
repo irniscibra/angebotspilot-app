@@ -1,36 +1,110 @@
 <template>
-  <q-page class="q-pa-lg">
+  <q-page class="q-pa-sm q-pa-md-lg" style="background: #f6f9fc">
     <div v-if="loading" class="flex flex-center q-pa-xl">
       <q-spinner-orbit color="primary" size="50px" />
     </div>
     <div v-else-if="quote">
-      <div class="row items-center q-mb-lg">
-        <q-btn
-          flat
-          round
-          icon="arrow_back"
-          color="grey-6"
-          class="q-mr-sm"
-          @click="$router.push('/quotes')"
-        />
-        <div class="col">
-          <div class="row items-center q-gutter-sm q-mb-xs">
+      <!-- HEADER – Mobile optimiert -->
+      <div class="q-mb-md">
+        <div class="row items-center no-wrap q-mb-xs">
+          <q-btn
+            flat
+            round
+            icon="arrow_back"
+            color="grey-6"
+            class="q-mr-xs"
+            @click="$router.push('/quotes')"
+          />
+          <div class="row items-center q-gutter-xs">
             <q-badge
               :color="statusColor(quote.status)"
               :label="statusLabel(quote.status)"
             />
-            <span style="font-size: 13px; color: #94a3b8">{{
+            <span style="font-size: 12px; color: #94a3b8">{{
               quote.quote_number
             }}</span>
           </div>
-          <h5 class="q-my-none" style="font-weight: 700; color: #0f172a">
+          <q-space />
+          <!-- Buttons nur Icons auf Mobile, mit Label auf Desktop -->
+          <div class="row items-center q-gutter-xs">
+            <q-btn
+              color="green"
+              icon="send"
+              :label="$q.screen.gt.sm ? 'Versenden' : ''"
+              no-caps
+              dense
+              @click="showSendDialog = true"
+            />
+            <q-btn
+              color="primary"
+              icon="picture_as_pdf"
+              :label="$q.screen.gt.sm ? 'PDF' : ''"
+              no-caps
+              dense
+              @click="onExportPdf"
+            />
+            <q-btn round flat icon="more_vert" color="grey-7">
+              <q-menu auto-close style="min-width: 220px; border-radius: 12px">
+                <q-list>
+                  <q-item clickable @click="onDuplicate">
+                    <q-item-section avatar
+                      ><q-icon name="content_copy" color="grey-7"
+                    /></q-item-section>
+                    <q-item-section>Duplizieren</q-item-section>
+                  </q-item>
+                  <q-item clickable @click="showSaveAsTemplateDialog = true">
+                    <q-item-section avatar
+                      ><q-icon name="content_paste" color="teal"
+                    /></q-item-section>
+                    <q-item-section>Als Vorlage speichern</q-item-section>
+                  </q-item>
+                  <q-item
+                    clickable
+                    @click="$router.push(`/protokolle/neu/${quote.id}`)"
+                  >
+                    <q-item-section avatar
+                      ><q-icon name="assignment_turned_in" color="teal"
+                    /></q-item-section>
+                    <q-item-section>Abnahmeprotokoll</q-item-section>
+                  </q-item>
+                  <q-separator />
+                  <q-item clickable @click="onDelete">
+                    <q-item-section avatar
+                      ><q-icon name="delete" color="negative"
+                    /></q-item-section>
+                    <q-item-section class="text-negative"
+                      >Angebot löschen</q-item-section
+                    >
+                  </q-item>
+                  <q-item clickable @click="$router.push('/invoices')">
+                    <q-item-section avatar
+                      ><q-icon name="receipt_long" color="blue"
+                    /></q-item-section>
+                    <q-item-section>Rechnung erstellen</q-item-section>
+                  </q-item>
+                </q-list>
+              </q-menu>
+            </q-btn>
+          </div>
+        </div>
+        <!-- Titel in eigener Zeile -->
+        <div class="q-pl-xs">
+          <h5
+            class="q-my-none"
+            style="
+              font-weight: 700;
+              color: #0f172a;
+              font-size: clamp(16px, 4vw, 22px);
+            "
+          >
             <span
               v-if="!editingTitle"
               @dblclick="startEditTitle"
               class="cursor-pointer"
-              >{{ quote.project_title }}
-              <q-icon name="edit" size="16px" color="grey-5" class="q-ml-xs"
-            /></span>
+            >
+              {{ quote.project_title }}
+              <q-icon name="edit" size="14px" color="grey-5" class="q-ml-xs" />
+            </span>
             <q-input
               v-else
               v-model="editTitle"
@@ -43,37 +117,6 @@
             />
           </h5>
         </div>
-      <div class="q-gutter-sm">
-  <q-btn color="green" icon="send" label="Versenden" no-caps @click="showSendDialog = true" />
-  <q-btn color="primary" icon="picture_as_pdf" label="PDF" no-caps @click="onExportPdf" />
-  <q-btn round flat icon="more_vert" color="grey-7">
-    <q-menu auto-close style="min-width: 220px; border-radius: 12px;">
-      <q-list>
-        <q-item clickable @click="onDuplicate">
-          <q-item-section avatar><q-icon name="content_copy" color="grey-7" /></q-item-section>
-          <q-item-section>Duplizieren</q-item-section>
-        </q-item>
-        <q-item clickable @click="showSaveAsTemplateDialog = true">
-          <q-item-section avatar><q-icon name="content_paste" color="teal" /></q-item-section>
-          <q-item-section>Als Vorlage speichern</q-item-section>
-        </q-item>
-        <q-item clickable @click="$router.push(`/protokolle/neu/${quote.id}`)">
-          <q-item-section avatar><q-icon name="assignment_turned_in" color="teal" /></q-item-section>
-          <q-item-section>Abnahmeprotokoll</q-item-section>
-        </q-item>
-        <q-separator />
-        <q-item clickable @click="onDelete">
-          <q-item-section avatar><q-icon name="delete" color="negative" /></q-item-section>
-          <q-item-section class="text-negative">Angebot löschen</q-item-section>
-        </q-item>
-        <q-item clickable @click="$router.push('/invoices')">
-  <q-item-section avatar><q-icon name="receipt_long" color="blue" /></q-item-section>
-  <q-item-section>Rechnung erstellen</q-item-section>
-</q-item>
-      </q-list>
-    </q-menu>
-  </q-btn>
-</div>
       </div>
 
       <!-- Info Cards -->
@@ -275,12 +318,12 @@
                 <h6 class="q-my-none" style="font-weight: 600; color: #0f172a">
                   Positionen
                 </h6>
-                <div class="q-gutter-sm">
+                <div class="row q-gutter-xs">
                   <q-btn
                     flat
                     color="teal"
                     icon="content_paste"
-                    label="Vorlage einfügen"
+                    :label="$q.screen.gt.sm ? 'Vorlage einfügen' : ''"
                     no-caps
                     dense
                     @click="openTemplateDialog"
@@ -289,13 +332,14 @@
                     flat
                     color="primary"
                     icon="add"
-                    label="Position hinzufügen"
+                    :label="$q.screen.gt.sm ? 'Position hinzufügen' : ''"
                     no-caps
                     dense
                     @click="openAddDialog"
                   />
                 </div>
               </div>
+
               <div
                 v-for="(items, groupName) in groupedItems"
                 :key="groupName"
@@ -325,8 +369,107 @@
                     border-radius: 10px;
                   "
                 >
-                  <q-card-section class="q-py-sm q-px-md">
-                    <div class="row items-center q-gutter-sm">
+                  <q-card-section class="q-py-sm q-px-sm">
+                    <!-- Mobile Layout: gestapelt -->
+                    <div v-if="$q.screen.lt.md">
+                      <div class="row items-start justify-between q-mb-xs">
+                        <div class="col">
+                          <div class="row items-center q-gutter-xs q-mb-xs">
+                            <span
+                              style="
+                                font-size: 13px;
+                                font-weight: 600;
+                                color: #0f172a;
+                              "
+                              >{{ item.title }}</span
+                            >
+                            <q-badge
+                              :color="
+                                item.type === 'material' ? 'blue' : 'orange'
+                              "
+                              :label="
+                                item.type === 'material' ? 'Material' : 'Arbeit'
+                              "
+                              dense
+                              style="font-size: 10px"
+                            />
+                            <q-badge
+                              v-if="item.material_id"
+                              color="green-7"
+                              label="Katalog"
+                              dense
+                              style="font-size: 10px"
+                            />
+                          </div>
+                          <div
+                            v-if="item.description"
+                            style="font-size: 11px; color: #94a3b8"
+                          >
+                            {{ item.description }}
+                          </div>
+                        </div>
+                        <q-btn
+                          flat
+                          round
+                          dense
+                          icon="close"
+                          color="negative"
+                          size="sm"
+                          @click="onDeleteItem(item)"
+                        />
+                      </div>
+                      <div class="row items-center q-gutter-sm">
+                        <div style="width: 70px">
+                          <q-input
+                            :model-value="item.quantity"
+                            @change="
+                              (val) => onUpdateItem(item, 'quantity', val)
+                            "
+                            dense
+                            filled
+                            type="number"
+                            step="0.5"
+                            style="font-size: 12px"
+                          />
+                        </div>
+                        <div
+                          style="
+                            font-size: 12px;
+                            color: #64748b;
+                            min-width: 30px;
+                          "
+                        >
+                          {{ item.unit }}
+                        </div>
+                        <div style="width: 85px">
+                          <q-input
+                            :model-value="item.unit_price"
+                            @change="
+                              (val) => onUpdateItem(item, 'unit_price', val)
+                            "
+                            dense
+                            filled
+                            type="number"
+                            step="0.50"
+                            suffix="€"
+                            style="font-size: 12px"
+                          />
+                        </div>
+                        <q-space />
+                        <div
+                          style="
+                            font-weight: 700;
+                            font-size: 14px;
+                            color: #1d4ed8;
+                          "
+                        >
+                          {{ formatPrice(item.quantity * item.unit_price) }} €
+                        </div>
+                      </div>
+                    </div>
+
+                    <!-- Desktop Layout: eine Zeile -->
+                    <div v-else class="row items-center q-gutter-sm">
                       <div class="col">
                         <div class="row items-center q-gutter-xs">
                           <span
@@ -369,10 +512,7 @@
                       <div style="width: 75px">
                         <q-input
                           :model-value="item.quantity"
-                          @change="
-                            (val) =>
-                              onUpdateItem(item, 'quantity', val)
-                          "
+                          @change="(val) => onUpdateItem(item, 'quantity', val)"
                           dense
                           filled
                           type="number"
@@ -390,8 +530,7 @@
                         <q-input
                           :model-value="item.unit_price"
                           @change="
-                            (val) =>
-                              onUpdateItem(item, 'unit_price', val)
+                            (val) => onUpdateItem(item, 'unit_price', val)
                           "
                           dense
                           filled
@@ -426,6 +565,7 @@
                   </q-card-section>
                 </q-card>
               </div>
+
               <div
                 v-if="!quote.items || quote.items.length === 0"
                 class="text-center q-pa-lg"
@@ -435,6 +575,7 @@
               </div>
             </q-card-section>
           </q-card>
+
           <q-card
             flat
             class="q-mt-md"
@@ -551,7 +692,8 @@
                   <span
                     style="font-weight: 700; font-size: 16px; color: #0f172a"
                     >Gesamt</span
-                  ><span
+                  >
+                  <span
                     style="font-weight: 800; font-size: 20px; color: #1d4ed8"
                     >{{ formatPrice(quote.total_gross) }} €</span
                   >
@@ -615,16 +757,15 @@
       </div>
     </div>
 
-    <!-- Position hinzufügen Dialog MIT Materialsuche -->
+    <!-- Dialoge – UNVERÄNDERT -->
     <q-dialog v-model="showAddDialog">
-      <q-card style="min-width: 560px; max-width: 95vw; border-radius: 14px">
-        <q-card-section>
-          <h6 class="q-my-none" style="color: #0f172a; font-weight: 600">
+      <q-card style="width: 95vw; max-width: 560px; border-radius: 16px">
+        <q-card-section
+          ><h6 class="q-my-none" style="color: #0f172a; font-weight: 600">
             Position hinzufügen
-          </h6>
-        </q-card-section>
+          </h6></q-card-section
+        >
         <q-card-section class="q-pt-none q-gutter-sm">
-          <!-- Materialsuche -->
           <div style="position: relative">
             <q-input
               v-model="materialSearch"
@@ -638,21 +779,17 @@
               <template v-slot:prepend
                 ><q-icon name="search" color="grey-5"
               /></template>
-              <template v-slot:after>
-                <q-badge
+              <template v-slot:after
+                ><q-badge
                   v-if="catalogResults.length"
                   color="primary"
                   :label="catalogResults.length"
-                />
-              </template>
+              /></template>
             </q-input>
-
-            <!-- Suchergebnisse Dropdown -->
             <q-card
               v-if="catalogResults.length > 0 && materialSearch"
               flat
               bordered
-              class="catalog-dropdown"
               style="
                 position: absolute;
                 z-index: 100;
@@ -711,8 +848,6 @@
               </q-list>
             </q-card>
           </div>
-
-          <!-- Gewähltes Material Info -->
           <q-banner
             v-if="selectedMaterial"
             rounded
@@ -733,25 +868,21 @@
               {{ selectedMaterial.category }} ·
               {{ formatPrice(selectedMaterial.selling_price) }} €/{{
                 selectedMaterial.unit
-              }}
-              <span v-if="selectedMaterial.supplier">
+              }}<span v-if="selectedMaterial.supplier">
                 · {{ selectedMaterial.supplier }}</span
               >
             </div>
-            <template v-slot:action>
-              <q-btn
+            <template v-slot:action
+              ><q-btn
                 flat
                 dense
                 icon="close"
                 color="grey"
                 size="sm"
                 @click="clearMaterialSearch"
-              />
-            </template>
+            /></template>
           </q-banner>
-
           <q-separator class="q-my-xs" />
-
           <q-select
             v-model="newItem.type"
             filled
@@ -822,9 +953,8 @@
       </q-card>
     </q-dialog>
 
-    <!-- Vorlage einfügen Dialog -->
     <q-dialog v-model="showTemplateDialog">
-      <q-card style="min-width: 560px; max-width: 95vw; border-radius: 16px">
+      <q-card style="width: 95vw; max-width: 420px; border-radius: 14px">
         <q-card-section class="row items-center q-pb-sm">
           <q-icon
             name="content_paste"
@@ -835,8 +965,14 @@
           <h6 class="q-my-none" style="font-weight: 600; color: #0f172a">
             Vorlage einfügen
           </h6>
-          <q-space />
-          <q-btn flat round dense icon="close" color="grey-5" v-close-popup />
+          <q-space /><q-btn
+            flat
+            round
+            dense
+            icon="close"
+            color="grey-5"
+            v-close-popup
+          />
         </q-card-section>
         <q-card-section class="q-pt-none">
           <q-input
@@ -845,11 +981,9 @@
             dense
             placeholder="Vorlage suchen..."
             class="q-mb-sm"
-          >
-            <template v-slot:prepend
-              ><q-icon name="search" color="grey-5"
-            /></template>
-          </q-input>
+            ><template v-slot:prepend
+              ><q-icon name="search" color="grey-5" /></template
+          ></q-input>
           <div v-if="templatesLoading" class="flex flex-center q-pa-md">
             <q-spinner color="primary" size="24px" />
           </div>
@@ -865,34 +999,32 @@
                 border: 1px solid #f1f5f9;
               "
             >
-              <q-item-section avatar>
-                <q-avatar
+              <q-item-section avatar
+                ><q-avatar
                   size="36px"
                   color="teal-1"
                   text-color="teal"
                   icon="content_paste"
-                />
-              </q-item-section>
+              /></q-item-section>
               <q-item-section>
                 <q-item-label style="font-weight: 600; color: #0f172a">{{
                   tpl.name
                 }}</q-item-label>
-                <q-item-label caption>
-                  <q-badge
+                <q-item-label caption
+                  ><q-badge
                     v-if="tpl.category"
                     :label="tpl.category"
                     dense
                     class="q-mr-xs"
                     color="grey-4"
                     text-color="grey-8"
-                  />
-                  {{ tpl.items_count }} Positionen · {{ tpl.usage_count }}×
-                  verwendet
-                </q-item-label>
+                  />{{ tpl.items_count }} Positionen · {{ tpl.usage_count }}×
+                  verwendet</q-item-label
+                >
               </q-item-section>
-              <q-item-section side>
-                <q-icon name="add_circle" color="teal" size="20px" />
-              </q-item-section>
+              <q-item-section side
+                ><q-icon name="add_circle" color="teal" size="20px"
+              /></q-item-section>
             </q-item>
             <div
               v-if="filteredTemplates.length === 0"
@@ -927,9 +1059,8 @@
       </q-card>
     </q-dialog>
 
-    <!-- Aus Angebot als Vorlage speichern Dialog -->
     <q-dialog v-model="showSaveAsTemplateDialog">
-      <q-card style="min-width: 420px; border-radius: 14px">
+      <q-card style="width: 95vw; max-width: 420px; border-radius: 14px">
         <q-card-section>
           <h6 class="q-my-none" style="font-weight: 600; color: #0f172a">
             Als Vorlage speichern
@@ -969,15 +1100,20 @@
       </q-card>
     </q-dialog>
 
-    <!-- Kunde zuweisen Dialog -->
     <q-dialog v-model="showCustomerDialog">
-      <q-card style="min-width: 500px; max-width: 95vw; border-radius: 16px">
+      <q-card style="width: 95vw; max-width: 500px; border-radius: 16px">
         <q-card-section class="row items-center q-pb-sm">
           <h6 class="q-my-none" style="font-weight: 600; color: #0f172a">
             Kunde zuweisen
           </h6>
-          <q-space />
-          <q-btn flat round dense icon="close" color="grey-5" v-close-popup />
+          <q-space /><q-btn
+            flat
+            round
+            dense
+            icon="close"
+            color="grey-5"
+            v-close-popup
+          />
         </q-card-section>
         <q-card-section class="q-pt-none">
           <q-input
@@ -986,11 +1122,9 @@
             dense
             placeholder="Kunde suchen..."
             class="q-mb-sm"
-          >
-            <template v-slot:prepend
-              ><q-icon name="search" color="grey-5"
-            /></template>
-          </q-input>
+            ><template v-slot:prepend
+              ><q-icon name="search" color="grey-5" /></template
+          ></q-input>
           <div style="max-height: 350px; overflow-y: auto">
             <q-item
               v-if="quote.customer_id"
@@ -1019,14 +1153,13 @@
               style="border-radius: 8px; margin-bottom: 2px"
               :class="quote.customer_id === c.id ? 'bg-blue-1' : ''"
             >
-              <q-item-section avatar>
-                <q-avatar
+              <q-item-section avatar
+                ><q-avatar
                   size="36px"
                   :color="c.type === 'business' ? 'blue' : 'teal'"
                   text-color="white"
                   :icon="c.type === 'business' ? 'business' : 'person'"
-                />
-              </q-item-section>
+              /></q-item-section>
               <q-item-section>
                 <q-item-label style="font-weight: 500; color: #0f172a">{{
                   c.type === "business"
@@ -1076,11 +1209,16 @@
         </q-card-actions>
       </q-card>
     </q-dialog>
+
     <SendQuoteDialog
-  v-model="showSendDialog"
-  :quote="quote"
-  @sent="(q) => { quote = q; }"
-/>
+      v-model="showSendDialog"
+      :quote="quote"
+      @sent="
+        (q) => {
+          quote = q;
+        }
+      "
+    />
   </q-page>
 </template>
 
@@ -1090,7 +1228,7 @@ import { useRoute, useRouter } from "vue-router";
 import { useQuoteStore } from "src/stores/quotes";
 import { useQuasar } from "quasar";
 import { api } from "src/boot/axios";
-import SendQuoteDialog from 'src/components/SendQuoteDialog.vue'
+import SendQuoteDialog from "src/components/SendQuoteDialog.vue";
 export default {
   name: "QuoteDetailPage",
   components: { SendQuoteDialog },
@@ -1099,7 +1237,7 @@ export default {
     const router = useRouter();
     const quoteStore = useQuoteStore();
     const $q = useQuasar();
-const showSendDialog = ref(false)
+    const showSendDialog = ref(false);
     // State
     const loading = ref(true);
     const quote = ref(null);
@@ -1481,10 +1619,7 @@ const showSendDialog = ref(false)
     };
     const onExportPdf = () => {
       const t = localStorage.getItem("auth_token");
-      window.open(
-        `/api/quotes/${quote.value.id}/pdf?token=${t}`,
-        "_blank",
-      );
+      window.open(`/api/quotes/${quote.value.id}/pdf?token=${t}`, "_blank");
     };
 
     return {
@@ -1537,7 +1672,7 @@ const showSendDialog = ref(false)
       openTemplateDialog,
       onApplyTemplate,
       onSaveAsTemplate,
-      showSendDialog
+      showSendDialog,
     };
   },
 };

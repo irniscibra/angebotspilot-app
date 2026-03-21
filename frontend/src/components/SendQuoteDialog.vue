@@ -3,7 +3,7 @@
     :model-value="modelValue"
     @update:model-value="$emit('update:modelValue', $event)"
   >
-    <q-card style="min-width: 520px; max-width: 95vw; border-radius: 16px">
+    <q-card style="width: 95vw; max-width: 500px; border-radius: 16px">
       <!-- Header -->
       <q-card-section
         class="row items-center q-pb-sm"
