@@ -12,6 +12,7 @@ use App\Http\Controllers\Api\ServiceTemplateController;
 use App\Http\Controllers\Api\AcceptanceProtocolController;
 use App\Http\Controllers\Api\InvoiceController;
 use App\Http\Controllers\Api\DashboardController;
+use App\Http\Controllers\Api\QuoteImportController;
 
 /*
 |--------------------------------------------------------------------------
@@ -31,6 +32,9 @@ Route::middleware('auth:sanctum')->group(function () {
     // Auth
     Route::post('auth/logout', [AuthController::class, 'logout']);
     Route::get('auth/me', [AuthController::class, 'me']);
+
+    // PDF Import für Angebote
+    Route::post('quotes/import-pdf', [QuoteImportController::class, 'importFromPdf']);
 
     // Angebote (CRUD)
     Route::apiResource('quotes', QuoteController::class);

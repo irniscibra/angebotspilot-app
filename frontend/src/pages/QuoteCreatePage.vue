@@ -32,7 +32,7 @@
         </p>
       </div>
 
-      <div style="max-width: 800px; margin: 0 auto">
+      <div style="max-width: 1000px; margin: 0 auto">
         <!-- Methode wählen -->
         <div class="row q-gutter-md q-mb-lg justify-center">
           <q-card
@@ -144,6 +144,43 @@
               </div>
               <div style="font-size: 12px; color: #64748b; margin-top: 4px">
                 Manuell Positionen hinzufügen
+              </div>
+            </q-card-section>
+          </q-card>
+
+          <q-card
+            flat
+            clickable
+            @click="createMode = 'pdf'"
+            style="
+              width: 200px;
+              border-radius: 14px;
+              cursor: pointer;
+              transition: all 0.2s;
+            "
+            :style="
+              createMode === 'pdf'
+                ? 'border: 2px solid #dc2626; background: #fef2f2;'
+                : 'border: 2px solid #e2e8f0; background: #fff;'
+            "
+          >
+            <q-card-section class="text-center q-pa-lg">
+              <q-icon
+                name="picture_as_pdf"
+                size="40px"
+                :color="createMode === 'pdf' ? 'red' : 'grey-5'"
+              />
+              <div
+                class="q-mt-sm"
+                style="font-size: 15px; font-weight: 700"
+                :style="
+                  createMode === 'pdf' ? 'color: #dc2626;' : 'color: #0f172a;'
+                "
+              >
+                PDF importieren
+              </div>
+              <div style="font-size: 12px; color: #64748b; margin-top: 4px">
+                Fremdes Angebot hochladen, KI übernimmt Positionen
               </div>
             </q-card-section>
           </q-card>
@@ -413,6 +450,132 @@
               size="lg"
               no-caps
               @click="onCreateEmpty"
+              style="border-radius: 10px; font-weight: 600"
+            />
+          </q-card-section>
+        </q-card>
+
+        <!-- PDF Import Modus -->
+        <q-card
+          v-if="createMode === 'pdf'"
+          flat
+          style="
+            border: 1px solid #e2e8f0;
+            border-radius: 16px;
+            background: #ffffff;
+          "
+        >
+          <q-card-section class="q-pa-lg">
+            <div class="row q-gutter-md q-mb-md">
+              <q-select
+                v-model="selectedCustomer"
+                filled
+                dense
+                label="Kunde (optional)"
+                :options="customerOptions"
+                option-value="value"
+                option-label="label"
+                emit-value
+                map-options
+                clearable
+                class="col"
+                use-input
+                @filter="filterCustomers"
+              >
+                <template v-slot:prepend
+                  ><q-icon name="person" color="grey-5"
+                /></template>
+              </q-select>
+              <q-input
+                v-model="address"
+                filled
+                dense
+                label="Projektadresse (optional)"
+                class="col"
+              >
+                <template v-slot:prepend
+                  ><q-icon name="location_on" color="grey-5"
+                /></template>
+              </q-input>
+            </div>
+
+            <!-- Upload Zone -->
+            <div
+              class="text-center q-pa-xl"
+              style="
+                border: 2px dashed #e2e8f0;
+                border-radius: 12px;
+                cursor: pointer;
+                transition: all 0.2s;
+              "
+              :style="
+                pdfFile
+                  ? 'border-color: #16a34a; background: #f0fdf4;'
+                  : 'background: #f8fafc;'
+              "
+              @click="$refs.pdfInput.click()"
+              @dragover.prevent
+              @drop.prevent="onPdfDrop"
+            >
+              <input
+                ref="pdfInput"
+                type="file"
+                accept=".pdf"
+                style="display: none"
+                @change="onPdfSelect"
+              />
+              <q-icon
+                :name="pdfFile ? 'check_circle' : 'upload_file'"
+                :color="pdfFile ? 'positive' : 'grey-4'"
+                size="48px"
+              />
+              <div
+                class="q-mt-sm"
+                style="font-weight: 600; color: #0f172a; font-size: 15px"
+              >
+                {{ pdfFile ? pdfFile.name : "PDF hier ablegen oder klicken" }}
+              </div>
+              <div style="font-size: 12px; color: #94a3b8; margin-top: 4px">
+                {{
+                  pdfFile
+                    ? "Klicken um anderes PDF zu wählen"
+                    : "Angebot der anderen Firma als PDF hochladen · Max. 10MB"
+                }}
+              </div>
+            </div>
+
+            <q-banner
+              v-if="pdfFile"
+              rounded
+              class="q-mt-md"
+              style="
+                background: #eff6ff;
+                border: 1px solid #bfdbfe;
+                border-radius: 10px;
+              "
+            >
+              <template v-slot:avatar
+                ><q-icon name="auto_awesome" color="primary"
+              /></template>
+              <div style="font-size: 13px; color: #1e40af; font-weight: 600">
+                KI analysiert das PDF
+              </div>
+              <div style="font-size: 12px; color: #3b82f6; margin-top: 2px">
+                Alle Positionen werden übernommen – mit deinen eigenen Preisen
+                und deinem Logo.
+              </div>
+            </q-banner>
+
+            <q-btn
+              color="red"
+              icon="picture_as_pdf"
+              label="Angebot importieren"
+              class="full-width q-mt-md"
+              size="lg"
+              no-caps
+              :loading="importingPdf"
+              :disable="!pdfFile"
+              @click="onImportPdf"
               style="border-radius: 10px; font-weight: 600"
             />
           </q-card-section>
@@ -939,6 +1102,72 @@ export default {
       createdFromTemplate.value = false;
     };
 
+    //pdf import zeug
+    // PDF Import State
+    const pdfFile = ref(null);
+    const importingPdf = ref(false);
+    const pdfInput = ref(null);
+
+    const onPdfSelect = (event) => {
+      const file = event.target.files[0];
+      if (file && file.type === "application/pdf") {
+        pdfFile.value = file;
+      } else {
+        $q.notify({
+          type: "warning",
+          message: "Bitte eine PDF-Datei auswählen",
+        });
+      }
+    };
+
+    const onPdfDrop = (event) => {
+      const file = event.dataTransfer.files[0];
+      if (file && file.type === "application/pdf") {
+        pdfFile.value = file;
+      } else {
+        $q.notify({
+          type: "warning",
+          message: "Bitte eine PDF-Datei auswählen",
+        });
+      }
+    };
+
+    const onImportPdf = async () => {
+      if (!pdfFile.value) return;
+
+      importingPdf.value = true;
+      createdFromTemplate.value = false;
+
+      try {
+        const formData = new FormData();
+        formData.append("pdf", pdfFile.value);
+        if (selectedCustomer.value)
+          formData.append("customer_id", selectedCustomer.value);
+        if (address.value) formData.append("project_address", address.value);
+
+        const res = await api.post("/quotes/import-pdf", formData, {
+          headers: { "Content-Type": "multipart/form-data" },
+        });
+
+        const quote = res.data.quote;
+        quoteStore.currentQuote = quote;
+
+        $q.notify({
+          type: "positive",
+          message: `${res.data.positions_count} Positionen erfolgreich importiert!`,
+        });
+
+        quoteCreated.value = true;
+      } catch (e) {
+        $q.notify({
+          type: "negative",
+          message: e.response?.data?.message || "Fehler beim PDF-Import",
+        });
+      } finally {
+        importingPdf.value = false;
+      }
+    };
+
     return {
       quoteStore,
       createMode,
@@ -967,6 +1196,12 @@ export default {
       onCreateFromTemplate,
       onCreateEmpty,
       resetForm,
+      pdfFile,
+      importingPdf,
+      pdfInput,
+      onPdfSelect,
+      onPdfDrop,
+      onImportPdf,
     };
   },
 };
