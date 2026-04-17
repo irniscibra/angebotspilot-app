@@ -34,18 +34,15 @@ class QuoteImportController extends Controller
         $text    = '';
 
   // pdftotext bevorzugen (Server hat poppler-utils)
-$pdftotext = shell_exec('which pdftotext');
-if (!empty(trim($pdftotext ?? ''))) {
-    $rawText = shell_exec('pdftotext -layout ' . escapeshellarg($pdfPath) . ' -');
-    // Form feeds (\f) entfernen – reiner Scan hat nur diese Zeichen
-    $textClean = trim(str_replace(["\f", "\r", "\n", " "], '', $rawText ?? ''));
-    $text = empty($textClean) ? '' : $rawText;
+$pdfPath = $request->file('pdf')->getRealPath();
+$text = '';
 
-    Log::info('PDF Text Debug', [
-    'text_length' => strlen($text),
-    'text_clean_length' => strlen($textClean ?? ''),
-    'is_scan' => empty($text),
-]);
+// Blitzschnelle Scan-Erkennung: nur 1 Seite prüfen (< 1 Sekunde)
+$pdftotext = trim(shell_exec('which pdftotext') ?? '');
+if (!empty($pdftotext)) {
+    $rawText = shell_exec('pdftotext -layout -f 1 -l 1 ' . escapeshellarg($pdfPath) . ' - 2>/dev/null');
+    $textClean = trim(str_replace(["\f", "\r", "\n", " "], '', $rawText ?? ''));
+    $text = empty($textClean) ? '' : ($rawText ?? '');
 }
 
 // Fallback: smalot/pdfparser (lokal ohne poppler)
