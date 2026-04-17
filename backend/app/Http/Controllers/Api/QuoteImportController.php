@@ -94,7 +94,7 @@ if (empty(trim($text ?? ''))) {
         'quote'      => $quote,
         'is_scan'    => true,
         'message'    => 'Scan-PDF erkannt. Angebot wird im Hintergrund verarbeitet.',
-    ], 202);
+    ], 202)->header('Connection', 'close');
 }
 
         // Text auf 8000 Zeichen begrenzen
