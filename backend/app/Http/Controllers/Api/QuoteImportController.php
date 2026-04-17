@@ -46,17 +46,7 @@ if (!empty($pdftotext)) {
 }
 
 // Fallback: smalot/pdfparser (lokal ohne poppler)
-if (empty(trim($text ?? ''))) {
-    try {
-        $parser = new \Smalot\PdfParser\Parser();
-        $pdf    = $parser->parseFile($pdfPath);
-        $rawText = $pdf->getText();
-        $textClean = trim(str_replace(["\f", "\r", "\n", " "], '', $rawText ?? ''));
-        $text = empty($textClean) ? '' : $rawText;
-    } catch (\Exception $e) {
-        Log::error('PDF Parser Fehler', ['error' => $e->getMessage()]);
-    }
-}
+
 
      if (empty(trim($text ?? ''))) {
     // Scan-PDF erkannt → Queue Job starten
