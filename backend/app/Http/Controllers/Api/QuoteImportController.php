@@ -15,8 +15,14 @@ class QuoteImportController extends Controller
 {
     public function importFromPdf(Request $request): JsonResponse
     {
+
+      Log::info('Import PDF Request', [
+        'has_file' => $request->hasFile('pdf'),
+        'files' => array_keys($request->allFiles()),
+        'content_type' => $request->header('Content-Type'),
+    ]);
         $request->validate([
-            'pdf'              => 'required|file|mimes:pdf|max:10240',
+            'pdf'              => 'required|file|mimetypes:application/pdf,application/octet-stream|max:51200',
             'customer_id'      => 'nullable|exists:customers,id',
             'project_address'  => 'nullable|string|max:500',
         ]);
@@ -27,31 +33,75 @@ class QuoteImportController extends Controller
         $pdfPath = $request->file('pdf')->getRealPath();
         $text    = '';
 
-        // pdftotext bevorzugen (Server hat poppler-utils)
-        $pdftotext = shell_exec('which pdftotext');
-        if (!empty(trim($pdftotext ?? ''))) {
-            $text = shell_exec('pdftotext -layout ' . escapeshellarg($pdfPath) . ' -');
-        }
+  // pdftotext bevorzugen (Server hat poppler-utils)
+$pdftotext = shell_exec('which pdftotext');
+if (!empty(trim($pdftotext ?? ''))) {
+    $rawText = shell_exec('pdftotext -layout ' . escapeshellarg($pdfPath) . ' -');
+    // Form feeds (\f) entfernen – reiner Scan hat nur diese Zeichen
+    $textClean = trim(str_replace(["\f", "\r", "\n", " "], '', $rawText ?? ''));
+    $text = empty($textClean) ? '' : $rawText;
 
-        // Fallback: smalot/pdfparser (lokal ohne poppler)
-        if (empty(trim($text ?? ''))) {
-            try {
-                $parser = new \Smalot\PdfParser\Parser();
-                $pdf    = $parser->parseFile($pdfPath);
-                $text   = $pdf->getText();
-            } catch (\Exception $e) {
-                Log::error('PDF Parser Fehler', ['error' => $e->getMessage()]);
-            }
-        }
+    Log::info('PDF Text Debug', [
+    'text_length' => strlen($text),
+    'text_clean_length' => strlen($textClean ?? ''),
+    'is_scan' => empty($text),
+]);
+}
 
-        if (empty(trim($text ?? ''))) {
-            return response()->json([
-                'message' => 'PDF konnte nicht gelesen werden. Bitte ein anderes PDF versuchen.',
-            ], 422);
-        }
+// Fallback: smalot/pdfparser (lokal ohne poppler)
+if (empty(trim($text ?? ''))) {
+    try {
+        $parser = new \Smalot\PdfParser\Parser();
+        $pdf    = $parser->parseFile($pdfPath);
+        $rawText = $pdf->getText();
+        $textClean = trim(str_replace(["\f", "\r", "\n", " "], '', $rawText ?? ''));
+        $text = empty($textClean) ? '' : $rawText;
+    } catch (\Exception $e) {
+        Log::error('PDF Parser Fehler', ['error' => $e->getMessage()]);
+    }
+}
+
+     if (empty(trim($text ?? ''))) {
+    // Scan-PDF erkannt → Queue Job starten
+    $storedPath = $request->file('pdf')->store('temp/scan_pdfs', 'local');
+    $fullPath = storage_path('app/private/' . $storedPath);
+    
+    // Fallback falls Pfad anders
+    if (!file_exists($fullPath)) {
+        $fullPath = storage_path('app/' . $storedPath);
+    }
+
+    // Leeres Angebot erstellen als Platzhalter
+    $quote = Quote::create([
+        'company_id'          => $company->id,
+        'customer_id'         => $request->customer_id,
+        'created_by'          => $request->user()->id,
+        'quote_number'        => $company->generateQuoteNumber(),
+        'project_title'       => 'Scan wird verarbeitet...',
+        'project_description' => 'Aus Scan-PDF importiert',
+        'project_address'     => $request->project_address,
+        'vat_rate'            => $company->default_vat_rate ?? 19,
+        'valid_until'         => now()->addDays($company->quote_validity_days ?? 30),
+        'internal_notes'      => 'scan_processing',
+    ]);
+
+    // Queue Job dispatchen
+    \App\Jobs\ProcessScanPdfJob::dispatch(
+        $quote->id,
+        $fullPath,
+        $company->id,
+        $request->user()->id,
+    );
+
+    return response()->json([
+        'quote'      => $quote,
+        'is_scan'    => true,
+        'message'    => 'Scan-PDF erkannt. Angebot wird im Hintergrund verarbeitet.',
+    ], 202);
+}
 
         // Text auf 8000 Zeichen begrenzen
-        $text = mb_substr($text, 0, 8000);
+        $text = mb_substr($text, 0, 50000);
 
         // ── 2. Katalog der Firma laden (für Matching) ────────────────────────
         $catalogMaterials = Material::where('company_id', $company->id)
@@ -123,7 +173,7 @@ Felder:
                 'Content-Type'  => 'application/json',
             ])->timeout(90)->post('https://api.openai.com/v1/chat/completions', [
                 'model'      => 'gpt-4o',
-                'max_tokens' => 4000,
+                'max_tokens' => 8000,
                 'messages'   => [
                     ['role' => 'user', 'content' => $prompt],
                 ],
@@ -266,4 +316,45 @@ Felder:
             ], 500);
         }
     }
+
+    /**
+ * Status eines Scan-PDF Jobs abfragen
+ */
+public function scanStatus(Request $request, int $quoteId): JsonResponse
+{
+    $quote = Quote::where('id', $quoteId)
+        ->where('company_id', $request->user()->company_id)
+        ->firstOrFail();
+
+    $notes = $quote->internal_notes ?? '';
+
+    if (str_starts_with($notes, 'scan_processing')) {
+        return response()->json([
+            'status'  => 'processing',
+            'message' => 'Scan wird verarbeitet...',
+        ]);
+    }
+
+    if (str_starts_with($notes, 'scan_done')) {
+        $quote->load('items');
+        return response()->json([
+            'status'  => 'done',
+            'message' => 'Angebot fertig!',
+            'quote'   => $quote,
+        ]);
+    }
+
+    if (str_starts_with($notes, 'scan_failed')) {
+        return response()->json([
+            'status'  => 'failed',
+            'message' => str_replace('scan_failed: ', '', $notes),
+        ]);
+    }
+
+    // Normales Angebot (kein Scan)
+    return response()->json([
+        'status'  => 'done',
+        'quote'   => $quote->load('items'),
+    ]);
+}
 }

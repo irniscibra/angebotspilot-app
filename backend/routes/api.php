@@ -35,6 +35,7 @@ Route::middleware('auth:sanctum')->group(function () {
 
     // PDF Import für Angebote
     Route::post('quotes/import-pdf', [QuoteImportController::class, 'importFromPdf']);
+    Route::get('quotes/{quoteId}/scan-status', [QuoteImportController::class, 'scanStatus']); // NEU
 
     // Angebote (CRUD)
     Route::apiResource('quotes', QuoteController::class);
