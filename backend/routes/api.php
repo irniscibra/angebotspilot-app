@@ -21,13 +21,13 @@ use App\Http\Controllers\Api\QuoteImportController;
 */
 
 // ── Auth (öffentlich) ──
-Route::prefix('auth')->group(function () {
+    Route::prefix('auth')->group(function () {
     Route::post('register', [AuthController::class, 'register']);
     Route::post('login', [AuthController::class, 'login']);
 });
 
 // ── Geschützte Routen (Sanctum) ──
-Route::middleware('auth:sanctum')->group(function () {
+    Route::middleware('auth:sanctum')->group(function () {
 
     // Auth
     Route::post('auth/logout', [AuthController::class, 'logout']);
@@ -35,7 +35,9 @@ Route::middleware('auth:sanctum')->group(function () {
 
     // PDF Import für Angebote
     Route::post('quotes/import-pdf', [QuoteImportController::class, 'importFromPdf']);
-    Route::get('quotes/{quoteId}/scan-status', [QuoteImportController::class, 'scanStatus']); // NEU
+    Route::get('quotes/{quoteId}/scan-status', [QuoteImportController::class, 'scanStatus']);
+    Route::post('quotes/scan-prepare', [QuoteImportController::class, 'scanPrepare']); //NEU 
+    Route::post('quotes/{quoteId}/scan-upload', [QuoteImportController::class, 'scanUpload']); //NEU
 
     // Angebote (CRUD)
     Route::apiResource('quotes', QuoteController::class);
@@ -54,19 +56,19 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::apiResource('customers', CustomerController::class);
 
     // Firma
-Route::get('company', [CompanyController::class, 'show']);
-Route::put('company', [CompanyController::class, 'update']);
-Route::post('company/logo', [CompanyController::class, 'uploadLogo']);
-Route::delete('company/logo', [CompanyController::class, 'removeLogo']);
+    Route::get('company', [CompanyController::class, 'show']);
+    Route::put('company', [CompanyController::class, 'update']);
+    Route::post('company/logo', [CompanyController::class, 'uploadLogo']);
+    Route::delete('company/logo', [CompanyController::class, 'removeLogo']);
 
 // Materialsuche (Autocomplete)
-Route::get('/materials/search', [MaterialController::class, 'search']);
+    Route::get('/materials/search', [MaterialController::class, 'search']);
 
 // Materialien
 Route::apiResource('materials', MaterialController::class);
 
 // Datanorm Import
-Route::prefix('datanorm')->group(function () {
+    Route::prefix('datanorm')->group(function () {
     Route::get('/', [DatanormController::class, 'index']);
     Route::post('/preview', [DatanormController::class, 'preview']);
     Route::post('/import', [DatanormController::class, 'import']);
@@ -75,7 +77,7 @@ Route::prefix('datanorm')->group(function () {
 });
 
 //bauprotokolle
-Route::prefix('acceptance-protocols')->group(function () {
+    Route::prefix('acceptance-protocols')->group(function () {
     Route::get('/', [AcceptanceProtocolController::class, 'index']);
     Route::post('/', [AcceptanceProtocolController::class, 'store']);
     Route::get('/{protocol}', [AcceptanceProtocolController::class, 'show']);
@@ -85,7 +87,7 @@ Route::prefix('acceptance-protocols')->group(function () {
     Route::get('/{protocol}/pdf', [PdfController::class, 'acceptanceProtocol']);
 });
 //rechnungen
-Route::prefix('invoices')->group(function () {
+    Route::prefix('invoices')->group(function () {
     Route::get('/', [InvoiceController::class, 'index']);
     Route::post('/', [InvoiceController::class, 'store']);
     Route::post('/from-quote', [InvoiceController::class, 'createFromQuote']);
@@ -119,8 +121,8 @@ Route::prefix('service-templates')->group(function () {
 });
 
 // PDF-Generierung^
-Route::get('quotes/{quote}/pdf', [PdfController::class, 'generate']);
-Route::get('quotes/{quote}/pdf/preview', [PdfController::class, 'preview']);
+    Route::get('quotes/{quote}/pdf', [PdfController::class, 'generate']);
+    Route::get('quotes/{quote}/pdf/preview', [PdfController::class, 'preview']);
 
     // Dashboard Stats
     // Route::get('dashboard/stats', function (\Illuminate\Http\Request $request) {

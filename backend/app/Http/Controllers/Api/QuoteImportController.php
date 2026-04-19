@@ -344,4 +344,90 @@ public function scanStatus(Request $request, int $quoteId): JsonResponse
         'quote'   => $quote->load('items'),
     ]);
 }
+
+
+//NEU
+
+public function scanPrepare(Request $request): JsonResponse
+{
+    $request->validate([
+        'customer_id'     => 'nullable|exists:customers,id',
+        'project_address' => 'nullable|string|max:500',
+    ]);
+
+    $company = $request->user()->company;
+
+    $quote = Quote::create([
+        'company_id'          => $company->id,
+        'customer_id'         => $request->customer_id,
+        'created_by'          => $request->user()->id,
+        'quote_number'        => $company->generateQuoteNumber(),
+        'project_title'       => 'Scan wird verarbeitet...',
+        'project_description' => 'Aus Scan-PDF importiert',
+        'project_address'     => $request->project_address,
+        'vat_rate'            => $company->default_vat_rate ?? 19,
+        'valid_until'         => now()->addDays($company->quote_validity_days ?? 30),
+        'internal_notes'      => 'scan_processing',
+    ]);
+
+    return response()->json([
+        'quote_id' => $quote->id,
+        'message'  => 'Bereit für Upload',
+    ], 201);
+}
+
+/**
+ * Schritt 2: PDF hochladen und Job starten
+ */
+public function scanUpload(Request $request, int $quoteId): JsonResponse
+{
+    $request->validate([
+        'pdf' => 'required|file|mimetypes:application/pdf,application/octet-stream|max:51200',
+    ]);
+
+    $quote = Quote::where('id', $quoteId)
+        ->where('company_id', $request->user()->company_id)
+        ->firstOrFail();
+
+    $storedPath = $request->file('pdf')->store('temp/scan_pdfs', 'local');
+    $fullPath   = storage_path('app/private/' . $storedPath);
+
+    if (!file_exists($fullPath)) {
+        $fullPath = storage_path('app/' . $storedPath);
+    }
+
+    // Prüfen ob Text-PDF oder Scan
+    $pdfPath   = $request->file('pdf')->getRealPath();
+    $pdftotext = trim(shell_exec('which pdftotext') ?? '');
+    $text      = '';
+
+    if (!empty($pdftotext)) {
+        $rawText   = shell_exec('pdftotext -layout -f 1 -l 1 ' . escapeshellarg($pdfPath) . ' - 2>/dev/null');
+        $textClean = trim(str_replace(["\f", "\r", "\n", " "], '', $rawText ?? ''));
+        $text      = empty($textClean) ? '' : ($rawText ?? '');
+    }
+
+    if (!empty(trim($text))) {
+        // Text-PDF → Quote löschen und normal importieren
+        $quote->delete();
+        return response()->json([
+            'is_scan' => false,
+            'message' => 'Text-PDF erkannt, bitte normalen Import verwenden',
+        ], 200);
+    }
+
+    // Scan → Job dispatchen
+    \App\Jobs\ProcessScanPdfJob::dispatch(
+        $quote->id,
+        $fullPath,
+        $quote->company_id,
+        $request->user()->id,
+    );
+
+    return response()->json([
+        'quote_id' => $quote->id,
+        'is_scan'  => true,
+        'message'  => 'Job gestartet',
+    ], 202);
+}
 }

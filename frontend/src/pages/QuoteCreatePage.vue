@@ -1447,50 +1447,47 @@ export default {
       }
     };
 
-    const onImportPdf = async () => {
-      if (!pdfFile.value) return;
-      importingPdf.value = true;
+   const onImportPdf = async () => {
+  if (!pdfFile.value) return;
+  importingPdf.value = true;
 
-      try {
-        const formData = new FormData();
-        formData.append("pdf", pdfFile.value);
-        if (selectedCustomer.value)
-          formData.append("customer_id", selectedCustomer.value);
-        if (address.value) formData.append("project_address", address.value);
+  try {
+    // Schritt 1: Quote ID holen (sofort, kein Timeout möglich)
+    const prepareRes = await api.post('/quotes/scan-prepare', {
+      customer_id: selectedCustomer.value || undefined,
+      project_address: address.value || undefined,
+    });
 
-        const res = await api.post("/quotes/import-pdf", formData, {
-          headers: { "Content-Type": "multipart/form-data" },
-        });
+    const quoteId = prepareRes.data.quote_id;
 
-        const quote = res.data.quote;
-        const isScan = res.data.is_scan === true || res.status === 202;
+    // Schritt 2: Polling sofort starten mit bekannter Quote ID
+    scanQuoteId.value = quoteId;
+    importingPdf.value = false;
+    scanProcessing.value = true;
+    scanStatusMessage.value = 'PDF wird hochgeladen...';
+    startScanPolling(quoteId);
 
-        if (isScan) {
-          // Scan-PDF → Hintergrundverarbeitung mit Polling
-          scanQuoteId.value = quote.id;
-          importingPdf.value = false;
-          scanProcessing.value = true;
-          scanStatusMessage.value =
-            "Scan-PDF erkannt – KI liest alle Seiten...";
-          startScanPolling(quote.id);
-        } else {
-          // Normales Text-PDF → sofort fertig
-          quoteStore.currentQuote = quote;
-          importingPdf.value = false;
-          $q.notify({
-            type: "positive",
-            message: `${res.data.positions_count} Positionen importiert!`,
-          });
-          quoteCreated.value = true;
-        }
-      } catch (e) {
-        importingPdf.value = false;
-        $q.notify({
-          type: "negative",
-          message: e.response?.data?.message || "Fehler beim PDF-Import",
-        });
-      }
-    };
+    // Schritt 3: PDF hochladen im Hintergrund
+    const formData = new FormData();
+    formData.append('pdf', pdfFile.value);
+
+    await api.post(`/quotes/${quoteId}/scan-upload`, formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+      timeout: 300000, // 5 Minuten
+    });
+
+  } catch (e) {
+    // Wenn prepare fehlschlägt
+    if (!scanProcessing.value) {
+      importingPdf.value = false;
+      $q.notify({
+        type: 'negative',
+        message: e.response?.data?.message || 'Fehler beim Import',
+      });
+    }
+    // Wenn upload fehlschlägt aber polling läuft → ignorieren, job läuft trotzdem
+  }
+};
 
     return {
       quoteStore,
