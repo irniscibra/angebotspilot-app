@@ -36,6 +36,47 @@ class ProcessScanPdfJob implements ShouldQueue
             'internal_notes' => 'scan_processing'
         ]);
 
+         try {
+        // Prüfen ob Text-PDF oder Scan-PDF
+        $rawText   = shell_exec('pdftotext -layout ' . escapeshellarg($this->pdfPath) . ' - 2>/dev/null');
+        $textClean = trim(str_replace(["\f", "\r", "\n", " "], '', $rawText ?? ''));
+
+        if (!empty($textClean)) {
+            // Text-PDF → Text direkt verarbeiten
+            Log::info('Text-PDF erkannt', ['quote_id' => $this->quoteId]);
+            $positions = $this->extractPositionsFromText($rawText);
+        } else {
+            // Scan-PDF → GPT-4o Vision (unverändert)
+            Log::info('Scan-PDF erkannt', ['quote_id' => $this->quoteId]);
+            $positions = $scanService->extractPositions($this->pdfPath);
+        }
+
+        if (empty($positions)) {
+            $this->markFailed('Keine Positionen gefunden');
+            return;
+        }
+
+        Log::info('Positionen extrahiert', [
+            'quote_id' => $this->quoteId,
+            'count'    => count($positions)
+        ]);
+
+        $this->savePositions($positions);
+
+        Quote::where('id', $this->quoteId)->update([
+            'internal_notes' => 'scan_done',
+        ]);
+
+        Log::info('ProcessScanPdfJob fertig', ['quote_id' => $this->quoteId]);
+
+    } catch (\Throwable $e) {
+        Log::error('ProcessScanPdfJob Fehler', [
+            'quote_id' => $this->quoteId,
+            'error'    => $e->getMessage()
+        ]);
+        $this->markFailed($e->getMessage());
+    }
+
         try {
             $positions = $scanService->extractPositions($this->pdfPath);
 
@@ -65,6 +106,48 @@ class ProcessScanPdfJob implements ShouldQueue
             $this->markFailed($e->getMessage());
         }
     }
+
+    private function extractPositionsFromText(string $text): array
+{
+    $text = mb_substr($text, 0, 50000);
+
+    $response = \Illuminate\Support\Facades\Http::withHeaders([
+        'Authorization' => 'Bearer ' . env('OPENAI_API_KEY'),
+        'Content-Type'  => 'application/json',
+    ])->timeout(120)->post('https://api.openai.com/v1/chat/completions', [
+        'model'      => 'gpt-4o',
+        'max_tokens' => 4000,
+        'temperature' => 0.1,
+        'messages'   => [
+            [
+                'role'    => 'user',
+                'content' => 'Du bist ein Experte für Handwerkerangebote. Extrahiere alle Positionen aus diesem Angebot als JSON Array.
+Jede Position hat folgende Felder: pos, beschreibung, menge, einheit, einzelpreis.
+Gib NUR das JSON Array zurück, kein Text davor oder danach.
+Wenn ein Feld nicht lesbar ist, setze einen leeren String "".
+
+ANGEBOT:
+' . $text,
+            ],
+        ],
+    ]);
+
+    if (!$response->successful()) {
+        Log::error('Text-PDF API Fehler', ['status' => $response->status()]);
+        return [];
+    }
+
+    $content = $response->json('choices.0.message.content');
+    $content = trim(preg_replace('/```json\s*|\s*```/', '', $content ?? ''));
+    $positions = json_decode($content, true);
+
+    if (!is_array($positions)) {
+        Log::warning('Text-PDF JSON ungültig', ['content' => substr($content, 0, 200)]);
+        return [];
+    }
+
+    return $positions;
+}
 
    private function savePositions(array $positions): void
 {

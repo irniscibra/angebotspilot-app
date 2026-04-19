@@ -407,14 +407,22 @@ public function scanUpload(Request $request, int $quoteId): JsonResponse
         $text      = empty($textClean) ? '' : ($rawText ?? '');
     }
 
-    if (!empty(trim($text))) {
-        // Text-PDF → Quote löschen und normal importieren
-        $quote->delete();
-        return response()->json([
-            'is_scan' => false,
-            'message' => 'Text-PDF erkannt, bitte normalen Import verwenden',
-        ], 200);
-    }
+  if (!empty(trim($text))) {
+    // Text-PDF → gleicher Job wie Scan
+    \App\Jobs\ProcessScanPdfJob::dispatch(
+        $quote->id,
+        $fullPath,
+        $quote->company_id,
+        $request->user()->id,
+    );
+
+    return response()->json([
+        'quote_id' => $quote->id,
+        'is_scan'  => true,
+        'message'  => 'Text-PDF wird verarbeitet',
+    ], 202);
+}
+
 
     // Scan → Job dispatchen
     \App\Jobs\ProcessScanPdfJob::dispatch(
