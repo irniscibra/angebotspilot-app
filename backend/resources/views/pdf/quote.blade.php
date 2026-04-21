@@ -40,7 +40,7 @@
             left: 0;
             right: 0;
             height: 26mm;
-            padding-top: 6px;
+            padding: 20px;
         }
         .footer-line {
             height: 2px;
@@ -91,15 +91,17 @@
             display: table-cell;
             vertical-align: middle;
             width: 55%;
+            padding:20px;
         }
         .header-right {
             display: table-cell;
             vertical-align: middle;
             text-align: right;
             width: 45%;
+            padding:20px;
         }
         .logo-img {
-            max-height: 52px;
+            max-height: 200px;
             max-width: 200px;
             margin-bottom: 6px;
         }
@@ -130,9 +132,9 @@
 
         /* ===== SENDER ZEILE ===== */
         .sender-line {
-            font-size: 6pt;
+            font-size: 10pt;
             color: #94a3b8;
-            padding-bottom: 10px;
+            padding: 20px;
             margin-bottom: 18px;
             border-bottom: 0.5px solid #f1f5f9;
             letter-spacing: 0.2px;
@@ -148,6 +150,7 @@
             display: table;
             width: 100%;
             margin-bottom: 28px;
+            padding:20px;
         }
         .recipient-col {
             display: table-cell;
@@ -220,6 +223,7 @@
             margin-bottom: 16px;
             padding-bottom: 14px;
             border-bottom: 0.5px solid #e2e8f0;
+            padding:20px
         }
         .quote-label {
             font-size: 6.5pt;
@@ -242,6 +246,7 @@
             color: #475569;
             margin-bottom: 22px;
             line-height: 1.7;
+            padding:20px;
         }
 
         /* ===== POSITIONS GRUPPEN ===== */
