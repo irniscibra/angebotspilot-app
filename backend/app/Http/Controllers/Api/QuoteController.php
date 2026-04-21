@@ -368,6 +368,9 @@ public function send(Request $request, Quote $quote): JsonResponse
     /**
      * KI-Preischeck: Analysiert ob Preise marktgerecht sind.
      */
+   /**
+     * KI-Preischeck: Analysiert ob Preise marktgerecht sind.
+     */
     public function priceCheck(Request $request, Quote $quote): JsonResponse
     {
         $this->authorizeQuote($request, $quote);
@@ -376,54 +379,34 @@ public function send(Request $request, Quote $quote): JsonResponse
             'plz' => 'nullable|string|max:5',
         ]);
 
-        $quote->load('items');
-
-        Log::info('Items für Preischeck', [
-    'items' => $quote->items->map(fn($i) => [
-        'id' => $i->id,
-        'title' => $i->title,
-        'unit_price' => $i->unit_price,
-    ])->toArray()
-]);
-
+        $quote->load(['items', 'company']);
 
         if ($quote->items->isEmpty()) {
             return response()->json(['error' => 'Keine Positionen vorhanden.'], 422);
         }
 
-        $plz = $request->input('plz', '');
+        $plz    = $request->input('plz', '');
         $region = $this->getRegionFromPlz($plz);
 
-        // Positionen für KI aufbereiten
-        $itemsForAi = $quote->items->map(fn($item) => [
-            'id'         => $item->id,
-            'titel'      => $item->title,
-            'typ'        => $item->type === 'labor' ? 'Arbeit' : 'Material',
-            'menge'      => $item->quantity,
-            'einheit'    => $item->unit,
-            'einzelpreis'=> (float) $item->unit_price,
-            'gesamtpreis'=> (float) $item->total_price,
-        ])->values()->toJson(JSON_UNESCAPED_UNICODE);
+        // Gewerk aus Company holen
+        $trade = $quote->company->trade ?? 'shk';
 
-      // Gewerk aus Company holen
-$trade = $quote->company->trade ?? 'shk';
+        $tradeLabel = match($trade) {
+            'shk'        => 'Sanitär, Heizung, Klima (SHK)',
+            'elektro'    => 'Elektroinstallation',
+            'maler'      => 'Maler & Lackierer',
+            'trockenbau' => 'Trockenbau & Innenausbau',
+            'fliesen'    => 'Fliesen & Naturstein',
+            'schreiner'  => 'Schreiner & Tischler',
+            'dachdecker' => 'Dachdecker',
+            'gartenbau'  => 'Garten & Landschaftsbau',
+            'geruestbau' => 'Gerüstbau',
+            'kaelte'     => 'Kälte & Klimatechnik',
+            default      => 'Allgemeines Baugewerk',
+        };
 
-$tradeLabel = match($trade) {
-    'shk'        => 'Sanitär, Heizung, Klima (SHK)',
-    'elektro'    => 'Elektroinstallation',
-    'maler'      => 'Maler & Lackierer',
-    'trockenbau' => 'Trockenbau & Innenausbau',
-    'fliesen'    => 'Fliesen & Naturstein',
-    'schreiner'  => 'Schreiner & Tischler',
-    'dachdecker' => 'Dachdecker',
-    'gartenbau'  => 'Garten & Landschaftsbau',
-    'geruestbau' => 'Gerüstbau',
-    'kaelte'     => 'Kälte & Klimatechnik',
-    default      => 'Allgemeines Baugewerk',
-};
-
-$tradeReferenz = match($trade) {
-    'shk' => '
+        $tradeReferenz = match($trade) {
+            'shk' => '
 STUNDENSÄTZE SHK (Netto, ohne MwSt):
 - Geselle/Monteur:  Ost 65-75€ | Mitte 75-95€ | Süd/West 90-120€
 - Meister:          Ost 85-100€ | Mitte 100-125€ | Süd/West 120-150€
@@ -458,9 +441,9 @@ Pumpen/Armaturen:
 - Ausdehnungsgefäß 25L: 80-150€
 - Ausdehnungsgefäß 50L: 130-220€
 - Sicherheitsventil: 25-60€
-- Fußbodenheizung Heizkreisverteiler 6-Kreis: 400-800€
+- Fußbodenheizung Heizkreisverteiler inkl. Einbauschrank: 800-1.800€ pro Stück
 - Fußbodenheizung je m² (Material): 18-35€
-Rohrleitungen (Verkaufspreis je Laufmeter inkl. Fittings-Anteil):
+Rohrleitungen (Verkaufspreis je Laufmeter):
 - Kupferrohr 15mm: 8-18€/m
 - Kupferrohr 22mm: 12-25€/m
 - Kupferrohr 28mm: 18-35€/m
@@ -470,33 +453,141 @@ Rohrleitungen (Verkaufspreis je Laufmeter inkl. Fittings-Anteil):
 - Viega Sanpress 35mm: 28-48€/m
 - Viega Sanpress 42mm: 38-65€/m
 - Viega Temponox Edelstahl 54mm: 55-95€/m
-- SML-Rohr DN50: 12-22€/m
-- SML-Rohr DN70: 16-28€/m
-- SML-Rohr DN100: 20-38€/m
-- PP-Silent DN110 1m: 12-22€ je Stück
-- PP-Silent DN110 2m: 22-38€ je Stück
-Sanitär:
+- SML-Rohr DN50 je m: 12-22€
+- SML-Rohr DN70 je m: 16-28€
+- SML-Rohr DN100 je m: 20-38€
+- SML-Rohr DN125 je m: 28-50€
+- SML-Rohr DN125 3m Stange: 80-150€
+- PP-Silent DN110 1m Stück: 12-22€
+- PP-Silent DN110 2m Stück: 22-38€
+- PP-Silent DN75 1m Stück: 8-16€
+- PP-Silent DN50 1m Stück: 6-12€
+Fittings/Formstücke SML (je Stück):
+- Bogen SML DN50 45/88Grad: 5-12€
+- Bogen SML DN70 45/88Grad: 8-18€
+- Bogen SML DN100 45/88Grad: 12-25€
+- Bogen SML DN125 45/88Grad: 18-35€
+- Abzweig SML DN100: 18-35€
+- Abzweig SML DN125: 25-45€
+- Reduzierstück SML DN100/70: 8-18€
+- Verbinder SML-Rapid DN50: 3-6€
+- Verbinder SML-Rapid DN70: 3,50-7€
+- Verbinder SML-Rapid DN100: 4-8€
+- Verbinder SML-Rapid DN125: 5-10€
+- Universal-Kralle DN100: 5-10€
+- Universal-Kralle DN125: 6-12€
+PP-Silent Formstücke (je Stück):
+- PP-Silent Bogen 45Grad DN110: 4-9€
+- PP-Silent Bogen 67,5Grad DN75: 3-6€
+- PP-Silent Bogen 45Grad DN50: 2-5€
+- PP-Silent Abzweig 45Grad DN110/110: 5-12€
+- PP-Silent Doppelsteckmuffe DN75: 3-7€
+- Übergangsstück PP-Silent DN110x50: 6-14€
+Verbundrohr/Mehrschichtrohr (je m):
+- MPR Verbundrohr PE-RT 16mm: 8-18€
+- MPR Verbundrohr PE-RT 20mm: 10-22€
+- MPR Verbundrohr PE-RT 25mm: 12-25€
+- MPR Verbundrohr PE-RT 32mm: 15-30€
+- MPR Verbundrohr PE-RT 40mm Supersize: 18-35€
+- MPR Verbundrohr vorgedämmt 16mm: 8-18€
+- MPR Verbundrohr vorgedämmt 20mm: 10-22€
+- MPR Verbundrohr vorgedämmt 25mm: 12-25€
+- MPR Verbundrohr vorgedämmt 32mm: 15-30€
+MPR Fittings (je Stück):
+- MPR Winkel 90° 16-40mm: 2-5€
+- MPR T-Stück 16-40mm: 2,50-6€
+- MPR Kupplung 16-40mm: 2-5€
+- MPR Kupplung reduziert: 2,50-6€
+- MPR Wandwinkel: 3-7€
+- MPR Steck-/Pressübergang: 3-8€
+- MPR Übergang AG: 4-10€
+Pressfittings Edelstahl Geberit Mapress (je Stück):
+- Leitungsrohr Edelstahl 28mm je m: 8-18€
+- Leitungsrohr Edelstahl 35mm je m: 10-22€
+- Leitungsrohr Edelstahl 42mm je m: 12-28€
+- Bogen 42mm 90Grad: 8-18€
+- Reduzierstück 42x28mm: 5-12€
+- T-Stück 42mm: 8-18€
+- T-Stück reduziert 42x28/35: 9-20€
+- Übergangsstück 42mm AG: 7-15€
+Rohrschellen/Befestigung (je Stück):
+- Rohrschelle DA 15-22mm: 1-3€
+- Rohrschelle DA 19-26mm: 1,50-3,50€
+- Rohrschelle DA 48-51mm: 4-8€
+- Rohrschelle DA 68-73mm: 5-10€
+- Rohrschelle DA 100-104mm: 8-15€
+- Dämmschelle grün 1-1,5": 4-8€
+- Gewindestange M8 je m: 2-5€
+Armaturen/Ventile:
+- Freistromventil DN15 (1/2"): 12-25€
+- Freistromventil DN25 (1"): 20-40€
+- Freistromventil DN32 (1 1/4"): 30-55€
+- Freistromventil DN40 (1 1/2"): 40-70€
+- KRV-Ventil DN40: 45-80€
+- Rückspülfilter 1 1/4": 80-200€
+- Schiebemuffe Kupfer 22mm: 2-5€
+- Schiebemuffe Kupfer 35mm: 3-7€
+Sanitär komplett:
 - Vorwandelement WC (Geberit Duofix, Viega): 280-450€
 - UP-Spülkasten (Geberit Sigma, Grohe): 150-280€
-- Betätigungsplatte: 60-180€
-- Wand-WC spülrandlos (Duravit, Villeroy, Geberit): 250-550€
+- Betätigungsplatte (Geberit Sigma01): 60-180€
+- Wand-WC spülrandlos (Duravit, Villeroy, Vigour): 250-550€
 - Stand-WC: 150-350€
-- Waschtisch 55cm (Keramag, Duravit): 120-350€
-- Waschtisch 80cm: 200-500€
+- WC-Sitz: 25-80€
+- Waschtisch 40-55cm: 80-250€
+- Waschtisch 60-80cm: 150-400€
 - Einhebelmischer Waschtisch (Grohe, Hansgrohe): 80-250€
 - Einhebelmischer Küche: 100-300€
-- Thermostatarmatur Dusche (Grohe, Hansgrohe): 200-500€
-- Duscharmatur Unterputz: 350-800€
-- Duschrinne 80cm (Geberit, Viega): 180-380€
-- Badewanne Stahl/Acryl: 300-700€
-- Einbauwanne freistehend: 800-2.500€
-- Duschkabine komplett: 400-1.500€
-Solarthermie:
-- Solarkollektoranlage 4m² (Flachkollektor): 2.800-4.500€
-- Solarkollektoranlage 8m²: 5.000-8.000€
-Verbindungsstücke/Fittings Pauschal: je nach Umfang 200-5.000€',
+- Thermostatarmatur Dusche: 200-500€
+- Eckventil 1/2": 4-10€
+- Siphon Waschtisch: 10-25€
+- Klein-Durchlauferhitzer 3-3,5kW: 80-180€
+- Ausgussbecken Stahl: 40-100€
+- GIS/Duofix Vorwandsystem:
+  - Montageelement WC: 150-350€
+  - Profil GIS 5m: 20-50€
+  - Montagewinkel: 3-8€
+  - Verbindungsstück: 2-5€
+  - Paneel GIS 600x1300mm: 12-25€
+  - Spachtelmasse 5kg: 8-15€
+  - Schalldämmplatte: 2-5€
+Entwässerungssysteme:
+- Fäkalienhebeanlage (Jung Compli 300E): 500-900€
+- ACO Rückstauautomat DN100: 400-700€
+- ACO Überflutungsmelder: 60-120€
+- Pumpen-Keilflachschieber DN100: 80-150€
+- Alarmgeber Hebeanlage: 50-100€
+- Handmembranpumpe 1,5": 40-80€
+- Notentsorgungsanschluss Zubehör: 25-50€
+- E-KS-Stück DN100 Flansch: 30-60€
+Brandschutz:
+- Brandschutzbandage/Manschette DN70-100: 40-80€
+- Curaflam Konfix Pro DN70-100: 40-90€
+Wärmedämmung Rohre (je m):
+- Dämmung DN15: 3-7€
+- Dämmung DN20: 4-8€
+- Dämmung DN25: 4-9€
+- Dämmung DN32: 5-10€
+- Dämmung DN40: 5-12€
+- Dämmung DN100-125: 8-20€
+- Zulage Bögen/Formstücke DN25-40: 2-5€
+Isolierboxen Armaturen:
+- CONEL FLEX Isolierbox DN25: 6-12€
+- CONEL FLEX Isolierbox DN32: 8-15€
+- CONEL FLEX Isolierbox DN40: 10-18€
+Abwasserschlauch (je m):
+- Abwasserschlauch DN50: 2-4€
+- Abwasserschlauch DN70: 2,50-5€
+- Abwasserschlauch DN100: 3-6€
+Sonstiges SHK:
+- Kamerabefahrung/Ausfräsen/Spülen: 150-400€ pauschal
+- Kernbohrung DN100 durch Mauerwerk/Beton: 80-200€ je Bohrung
+- An- und Abfahrt: 40-80€ pauschal
+- Entsorgung Altmaterial Abwasserleitung: 5-20€ je Stück/Laufmeter
+- Entsorgung Trinkwasserverteiler: 8-20€
+- Schmutzzulage fäkalienhaltige Materialien: 15-30€/Std',
 
-    'elektro' => '
+            'elektro' => '
 STUNDENSÄTZE ELEKTRO (Netto):
 - Elektriker Geselle:  Ost 60-75€ | Mitte 72-90€ | Süd/West 85-115€
 - Elektromeister:      Ost 80-100€ | Mitte 95-120€ | Süd/West 115-145€
@@ -521,10 +612,9 @@ Kabel/Leitungen:
 - NYM 5x2,5mm je m: 3-6€
 - NYM 5x4mm je m: 5-9€
 - Leerrohr je m: 1-3€
-Verteiler/Zählerschrank:
+Verteiler:
 - Unterverteiler 24-polig: 80-180€
 - Zählerschrank 3-polig: 200-500€
-- Hutschiene je m: 8-20€
 Beleuchtung:
 - LED-Einbaustrahler: 15-60€
 - LED-Deckenleuchte: 30-150€
@@ -536,102 +626,72 @@ Sonstiges:
 - Rauchmelder: 20-60€
 - Netzwerkanschluss: 30-80€',
 
-    'maler' => '
+            'maler' => '
 STUNDENSÄTZE MALER (Netto):
 - Malergeselle:  Ost 42-55€ | Mitte 52-68€ | Süd/West 62-85€
 - Malermeister:  Ost 60-75€ | Mitte 70-90€ | Süd/West 82-105€
 
 LEISTUNGSPREISE MALER (inkl. Material und Arbeit je m², Netto):
-Innen:
-- Wände streichen 1x (inkl. Grundierung): 5-12€/m²
+- Wände streichen 1x: 5-12€/m²
 - Wände streichen 2x: 8-18€/m²
 - Decke streichen 2x: 10-22€/m²
 - Tapete abziehen: 3-8€/m²
 - Tapete kleben Raufaser: 10-20€/m²
 - Tapete kleben Vliestapete: 15-35€/m²
 - Spachteln glatt: 12-28€/m²
-- Grundierung: 3-8€/m²
 - Fassade streichen: 18-40€/m²
-Holzarbeiten:
-- Türen lackieren (je Stück): 80-250€
-- Fenster lackieren innen (je Stück): 60-200€
-- Heizkörper lackieren: 40-100€
-- Treppenstufen streichen: 15-35€/Stück
-Boden:
-- Bodenfarbe je m²: 8-20€/m²',
+- Türen lackieren: 80-250€/Stück
+- Fenster lackieren: 60-200€/Stück
+- Heizkörper lackieren: 40-100€/Stück',
 
-    'fliesen' => '
+            'fliesen' => '
 STUNDENSÄTZE FLIESEN (Netto):
 - Fliesenleger:  Ost 55-70€ | Mitte 65-85€ | Süd/West 78-105€
 
 LEISTUNGSPREISE FLIESEN (inkl. Material Standard und Arbeit, Netto):
-Bodenfliesen:
-- Bodenfliesen verlegen Standard (bis 60x60cm): 45-90€/m²
-- Bodenfliesen verlegen Großformat (ab 60x60cm): 65-130€/m²
+- Bodenfliesen Standard (bis 60x60cm): 45-90€/m²
+- Bodenfliesen Großformat (ab 60x60cm): 65-130€/m²
 - Naturstein verlegen: 80-200€/m²
-- Feinsteinzeug verlegen: 55-120€/m²
-Wandfliesen:
-- Wandfliesen verlegen Standard: 55-110€/m²
-- Mosaikfliesen verlegen: 80-160€/m²
-Zusatzleistungen:
+- Wandfliesen Standard: 55-110€/m²
+- Mosaikfliesen: 80-160€/m²
 - Altbelag entfernen: 8-20€/m²
-- Estrich/Untergrund vorbereiten: 10-25€/m²
-- Verfugung (separat): 8-18€/m²
 - Duschrinne einbauen: 150-400€
-- Treppenstufen fliesen: 50-120€/Stück
-- Sockelleiste je m: 8-20€/m',
+- Treppenstufen fliesen: 50-120€/Stück',
 
-    'schreiner' => '
+            'schreiner' => '
 STUNDENSÄTZE SCHREINER (Netto):
 - Schreinergeselle:  Ost 55-70€ | Mitte 65-85€ | Süd/West 78-105€
 - Schreinermeister:  Ost 75-95€ | Mitte 90-115€ | Süd/West 108-135€
 
 MATERIAL-/LEISTUNGSPREISE SCHREINER (Netto):
-Türen:
-- Innentür komplett montiert (Tür+Zarge): 350-800€
+- Innentür komplett (Tür+Zarge): 350-800€
 - Schallschutztür komplett: 600-1.500€
-- Zimmertür Zarge: 180-400€
 - Haustür Holz: 2.000-6.000€
-Fenster:
 - Fenster Kunststoff je m²: 250-500€
 - Fenster Holz je m²: 400-800€
-- Fenster Holz-Alu je m²: 500-1.000€
 - Rolladen elektrisch je Fenster: 400-900€
-Einbauschränke/Möbel:
 - Einbauschrank je lfdm: 400-1.200€
-- Kleiderschrank Sonderanfertigung je m²: 500-1.500€
-- Küche Montage je lfdm: 150-400€
-Bodenbeläge:
 - Parkett verlegen (inkl. Material Mittelklasse): 60-150€/m²
-- Dielen verlegen: 50-120€/m²
 - Laminat verlegen: 25-60€/m²
-Treppen:
-- Holztreppe Massiv gerade: 5.000-15.000€
-- Holztreppe mit Geländer: 8.000-25.000€
-- Treppenstufen erneuern: 100-300€/Stück',
+- Holztreppe Massiv gerade: 5.000-15.000€',
 
-    'dachdecker' => '
+            'dachdecker' => '
 STUNDENSÄTZE DACHDECKER (Netto):
 - Dachdecker:  Ost 55-70€ | Mitte 65-85€ | Süd/West 78-105€
 
 LEISTUNGSPREISE DACHDECKER (inkl. Material Standard, Netto):
-Eindeckung:
-- Dachziegel verlegen je m²: 80-180€/m²
-- Betondachstein je m²: 60-140€/m²
-- Flachdach EPDM je m²: 80-160€/m²
-- Flachdach Bitumen je m²: 60-130€/m²
-- Metalldach Stehfalz je m²: 100-220€/m²
-Dämmung:
-- Zwischensparrendämmung je m²: 40-90€/m²
-- Aufsparrendämmung je m²: 80-160€/m²
-Sonstiges:
-- Dachfenster einbauen (Velux, Fakro): 600-1.500€ je Stück
-- Regenrinne je m: 25-60€/m
-- Fallrohr je m: 20-50€/m
-- Schornstein sanieren: 500-3.000€
-- Dachstuhl reparieren je m²: 100-300€/m²',
+- Dachziegel verlegen: 80-180€/m²
+- Betondachstein: 60-140€/m²
+- Flachdach EPDM: 80-160€/m²
+- Flachdach Bitumen: 60-130€/m²
+- Metalldach Stehfalz: 100-220€/m²
+- Zwischensparrendämmung: 40-90€/m²
+- Dachfenster einbauen (Velux, Fakro): 600-1.500€/Stück
+- Regenrinne: 25-60€/m
+- Fallrohr: 20-50€/m
+- Schornstein sanieren: 500-3.000€',
 
-    'gartenbau' => '
+            'gartenbau' => '
 STUNDENSÄTZE GARTENBAU (Netto):
 - Fachkraft:  Ost 40-55€ | Mitte 50-68€ | Süd/West 60-85€
 
@@ -642,36 +702,33 @@ LEISTUNGSPREISE GARTENBAU (inkl. Material, Netto):
 - Terrassenplatten verlegen: 60-140€/m²
 - Holzdeck anlegen: 80-200€/m²
 - Hecke pflanzen: 15-40€ je Pflanze
-- Baum fällen: 200-2.000€ je Baum
-- Beet anlegen: 30-80€/m²
+- Baum fällen: 200-2.000€
 - Bewässerungsanlage: 20-50€/m²
 - Zaunmontage: 40-120€/m',
 
-    default => '
+            default => '
 STUNDENSÄTZE ALLGEMEIN (Netto):
 - Fachkraft:  Ost 55-75€ | Mitte 65-90€ | Süd/West 78-115€
 - Meister:    Ost 75-100€ | Mitte 90-120€ | Süd/West 110-150€
 
-Schätze Materialpreise anhand aktueller deutscher Marktpreise 2024/2025 
+Schätze Materialpreise anhand aktueller deutscher Marktpreise 2024/2025
 für das jeweilige Gewerk. Berücksichtige Großhandelsaufschlag von 30-60%.',
-};
+        };
 
-// Regionaler Faktor
-$regionalerFaktor = '';
-if (str_contains($region, 'sehr hohes Preisniveau')) {
-    $regionalerFaktor = 'REGIONAL: +15% auf alle Referenzpreise anwenden (sehr hohes Preisniveau)';
-} elseif (str_contains($region, 'hohes Preisniveau')) {
-    $regionalerFaktor = 'REGIONAL: +8% auf alle Referenzpreise anwenden (hohes Preisniveau)';
-} elseif (str_contains($region, 'niedriges')) {
-    $regionalerFaktor = 'REGIONAL: -10% auf alle Referenzpreise anwenden (niedriges Preisniveau)';
-} else {
-    $regionalerFaktor = 'REGIONAL: Referenzpreise unverändert anwenden (mittleres Preisniveau)';
-}
+        // Regionaler Faktor
+        if (str_contains($region, 'sehr hohes Preisniveau')) {
+            $regionalerFaktor = 'REGIONAL: +15% auf alle Referenzpreise anwenden (sehr hohes Preisniveau)';
+        } elseif (str_contains($region, 'hohes Preisniveau')) {
+            $regionalerFaktor = 'REGIONAL: +8% auf alle Referenzpreise anwenden (hohes Preisniveau)';
+        } elseif (str_contains($region, 'niedriges')) {
+            $regionalerFaktor = 'REGIONAL: -10% auf alle Referenzpreise anwenden (niedriges Preisniveau)';
+        } else {
+            $regionalerFaktor = 'REGIONAL: Referenzpreise unverändert anwenden (mittleres Preisniveau)';
+        }
 
-$prompt = 'Du bist ein unabhängiger Sachverständiger für Handwerkerpreise in Deutschland.
+        $promptBase = 'Du bist ein unabhängiger Sachverständiger für Handwerkerpreise in Deutschland.
 Spezialisierung: ' . $tradeLabel . '
 Region: ' . $region . '
-
 ' . $regionalerFaktor . '
 
 ════════════════════════════════════════════
@@ -682,6 +739,7 @@ REFERENZPREISE FÜR ' . strtoupper($tradeLabel) . ' (Deutschland 2024/2025)
 ════════════════════════════════════════════
 BEWERTUNGSREGELN – ABSOLUT KRITISCH
 ════════════════════════════════════════════
+
 1. MARKTPREIS ZUERST BESTIMMEN – UNABHÄNGIG VOM HANDWERKERPREIS:
    - Schaue dir den Produktnamen/Beschreibung an
    - Finde den passenden Referenzpreis aus obiger Liste
@@ -693,24 +751,22 @@ BEWERTUNGSREGELN – ABSOLUT KRITISCH
    - Bei Pauschalpositionen mit komplexer Beschreibung:
      lies die vollständige Beschreibung und schätze realistisch
    - "3 Außeneinheiten + 3 Innengeräte + 4000L Speicher" = Gesamtanlage → Markt 60.000-100.000€
-   
+
    PAUSCHALPOSITIONEN MIT MEHREREN KOMPONENTEN:
    - Wenn Beschreibung mehrere Geräte/Komponenten enthält → summiere alle Marktpreise
-   - Fussbodenheizung Heizkreisverteiler = NUR 1 Verteiler-Einheit → Markt 80-160€ pro Stück
+   - Fussbodenheizung Heizkreisverteiler = NUR 1 Verteiler-Einheit → Markt 800-1.800€ pro Stück
      (menge=24 bedeutet 24 Stück, aber einzelpreis wird pro Stück verglichen!)
    - Montagearbeiten pauschal = Arbeitsleistung, nicht Material → realistischen Arbeitspreis schätzen
    - "Arbeitslohn" Positionen = Stundensatz × geschätzte Stunden ODER Pauschalpreis für Leistung
 
    WICHTIG für Pauschalpositionen (einheit = "pauschal"):
-- einzelpreis = Pauschalpreis für EINE komplette Leistungseinheit
-- Fussbodenheizung Heizkreisverteiler 1 pauschal = 1 kompletter Verteiler inkl. Einbauschrank
-  → Markt pro Stück: 800-1.800€ (Material + Montage zusammen)
-- NIEMALS menge × Referenzpreis als Marktvergleich verwenden
-- Vergleiche immer einzelpreis direkt mit Markt pro Einheit
-   
+   - einzelpreis = Pauschalpreis für EINE komplette Leistungseinheit
+   - NIEMALS menge × Referenzpreis als Marktvergleich verwenden
+   - Vergleiche immer einzelpreis direkt mit Markt pro Einheit
+
    BEISPIEL RICHTIG:
    Warmwasserspeicher 200L → Markt immer 900-1.600€, egal ob Handwerker 500€ oder 5.000€ verlangt
-   
+
    BEISPIEL FALSCH (niemals so machen):
    Handwerker verlangt 4.500€ → Markt plötzlich 3.000-4.000€ (VERBOTEN!)
    Handwerker verlangt 1.700€ → Markt plötzlich 1.500-1.900€ (VERBOTEN!)
@@ -718,7 +774,7 @@ BEWERTUNGSREGELN – ABSOLUT KRITISCH
 2. ABWEICHUNG BERECHNEN:
    marktmittelwert = (estimated_min + estimated_max) / 2
    abweichung_prozent = RUNDEN(((einzelpreis - marktmittelwert) / marktmittelwert) × 100)
-   
+
    Beispiel: einzelpreis=4.500€, Markt=900-1.600€, Mittel=1.250€
    abweichung = ((4500-1250)/1250)×100 = +260% → "zu_teuer"
 
@@ -739,7 +795,24 @@ BEWERTUNGSREGELN – ABSOLUT KRITISCH
 ════════════════════════════════════════════
 ZU ANALYSIERENDE POSITIONEN:
 ════════════════════════════════════════════
-' . $itemsForAi . '
+';
+
+        // ── Positionen in Batches à 25 aufteilen ──────────────────────────
+        $chunks     = $quote->items->chunk(25);
+        $allResults = [];
+
+        foreach ($chunks as $chunkIndex => $chunk) {
+            $chunkJson = $chunk->map(fn($item) => [
+                'id'          => $item->id,
+                'titel'       => $item->title,
+                'typ'         => $item->type === 'labor' ? 'Arbeit' : 'Material',
+                'menge'       => $item->quantity,
+                'einheit'     => $item->unit,
+                'einzelpreis' => (float) $item->unit_price,
+                'gesamtpreis' => (float) $item->total_price,
+            ])->values()->toJson(JSON_UNESCAPED_UNICODE);
+
+            $fullPrompt = $promptBase . $chunkJson . '
 
 Antworte NUR mit validem JSON Array ohne Kommentare oder Erklärungen:
 [
@@ -753,52 +826,68 @@ Antworte NUR mit validem JSON Array ohne Kommentare oder Erklärungen:
   }
 ]';
 
-        try {
-            $response = \Illuminate\Support\Facades\Http::withHeaders([
-                'Authorization' => 'Bearer ' . env('OPENAI_API_KEY'),
-                'Content-Type'  => 'application/json',
-            ])->timeout(60)->post('https://api.openai.com/v1/chat/completions', [
-                'model'       => 'gpt-4o',
-                'messages'    => [['role' => 'user', 'content' => $prompt]],
-                'max_tokens'  => 16000,
-                'temperature' => 0.1,
-            ]);
+            try {
+                $response = \Illuminate\Support\Facades\Http::withHeaders([
+                    'Authorization' => 'Bearer ' . env('OPENAI_API_KEY'),
+                    'Content-Type'  => 'application/json',
+                ])->timeout(120)->post('https://api.openai.com/v1/chat/completions', [
+                    'model'       => 'gpt-4o',
+                    'messages'    => [['role' => 'user', 'content' => $fullPrompt]],
+                    'max_tokens'  => 8000,
+                    'temperature' => 0.1,
+                ]);
 
-            $content = $response->json('choices.0.message.content');
-            $content = trim(preg_replace('/```json\s*|\s*```/', '', $content ?? ''));
-            $results = json_decode($content, true);
+                $content     = $response->json('choices.0.message.content');
+                $content     = trim(preg_replace('/```json\s*|\s*```/', '', $content ?? ''));
+                $batchResult = json_decode($content, true);
 
-            if (!is_array($results)) {
-                return response()->json(['error' => 'KI-Analyse fehlgeschlagen.'], 500);
+                if (is_array($batchResult)) {
+                    $allResults = array_merge($allResults, $batchResult);
+                    Log::info('Preischeck Batch ' . ($chunkIndex + 1) . '/' . $chunks->count() . ' OK', [
+                        'quote_id' => $quote->id,
+                        'items'    => $chunk->count(),
+                        'results'  => count($batchResult),
+                    ]);
+                } else {
+                    Log::warning('Preischeck Batch ' . ($chunkIndex + 1) . ' JSON ungültig', [
+                        'content' => substr($content, 0, 200),
+                    ]);
+                }
+            } catch (\Exception $e) {
+                Log::error('Preischeck Batch ' . ($chunkIndex + 1) . ' Fehler', [
+                    'error' => $e->getMessage(),
+                ]);
             }
-
-            // Gesamtbewertung berechnen
-            $bewertungen = array_column($results, 'bewertung');
-            $gesamtScore = $this->calculateGesamtScore($bewertungen);
-
-            // Gesamtabweichung
-            $abweichungen = array_column($results, 'abweichung_prozent');
-            $avgAbweichung = count($abweichungen) > 0 ? round(array_sum($abweichungen) / count($abweichungen), 1) : 0;
-
-            Log::info('Preischeck durchgeführt', [
-                'quote_id'       => $quote->id,
-                'items_count'    => $quote->items->count(),
-                'gesamt_score'   => $gesamtScore,
-                'plz'            => $plz,
-            ]);
-
-            return response()->json([
-                'items'            => $results,
-                'gesamt_bewertung' => $gesamtScore,
-                'avg_abweichung'   => $avgAbweichung,
-                'region'           => $region,
-                'plz'              => $plz,
-            ]);
-
-        } catch (\Exception $e) {
-            Log::error('Preischeck Fehler', ['error' => $e->getMessage()]);
-            return response()->json(['error' => 'Fehler bei der Analyse: ' . $e->getMessage()], 500);
         }
+
+        if (empty($allResults)) {
+            return response()->json(['error' => 'KI-Analyse fehlgeschlagen.'], 500);
+        }
+
+        // Gesamtbewertung
+        $bewertungen   = array_column($allResults, 'bewertung');
+        $gesamtScore   = $this->calculateGesamtScore($bewertungen);
+        $abweichungen  = array_column($allResults, 'abweichung_prozent');
+        $avgAbweichung = count($abweichungen) > 0
+            ? round(array_sum($abweichungen) / count($abweichungen), 1)
+            : 0;
+
+        Log::info('Preischeck fertig', [
+            'quote_id'     => $quote->id,
+            'total_items'  => $quote->items->count(),
+            'analyzed'     => count($allResults),
+            'batches'      => $chunks->count(),
+            'gesamt_score' => $gesamtScore,
+            'plz'          => $plz,
+        ]);
+
+        return response()->json([
+            'items'            => $allResults,
+            'gesamt_bewertung' => $gesamtScore,
+            'avg_abweichung'   => $avgAbweichung,
+            'region'           => $region,
+            'plz'              => $plz,
+        ]);
     }
 
     /**
