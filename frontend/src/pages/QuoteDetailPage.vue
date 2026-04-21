@@ -82,6 +82,12 @@
                     /></q-item-section>
                     <q-item-section>Rechnung erstellen</q-item-section>
                   </q-item>
+                  <q-item clickable @click="showPriceCheck = true">
+  <q-item-section avatar>
+    <q-icon name="analytics" color="primary" />
+  </q-item-section>
+  <q-item-section>KI-Preisanalyse</q-item-section>
+</q-item>
                 </q-list>
               </q-menu>
             </q-btn>
@@ -1219,6 +1225,7 @@
         }
       "
     />
+    <PriceCheckDialog v-model="showPriceCheck" :quote="quote" />
   </q-page>
 </template>
 
@@ -1229,9 +1236,10 @@ import { useQuoteStore } from "src/stores/quotes";
 import { useQuasar } from "quasar";
 import { api } from "src/boot/axios";
 import SendQuoteDialog from "src/components/SendQuoteDialog.vue";
+import PriceCheckDialog from "src/components/PriceCheckDialog.vue";
 export default {
   name: "QuoteDetailPage",
-  components: { SendQuoteDialog },
+  components: { SendQuoteDialog, PriceCheckDialog },
   setup() {
     const route = useRoute();
     const router = useRouter();
@@ -1264,6 +1272,9 @@ export default {
     const templatesLoading = ref(false);
     const showSaveAsTemplateDialog = ref(false);
     const saveTemplateForm = ref({ name: "", category: "" });
+
+    //KI Price Analyse Dialog ref
+    const showPriceCheck = ref(false);
 
     const newItem = ref({
       type: "material",
@@ -1673,6 +1684,7 @@ export default {
       onApplyTemplate,
       onSaveAsTemplate,
       showSendDialog,
+      showPriceCheck,
     };
   },
 };

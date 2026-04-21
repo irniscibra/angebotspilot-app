@@ -97,6 +97,23 @@
                       ><q-icon name="email" color="grey-5" /></template
                   ></q-input>
                 </div>
+                <div>
+                  <q-select
+                    v-model="form.trade"
+                    filled
+                    :options="tradeOptions"
+                    option-value="value"
+                    option-label="label"
+                    emit-value
+                    map-options
+                    clearable
+                    label="Gewerk (für KI-Preisanalyse)"
+                  >
+                    <template v-slot:prepend>
+                      <q-icon name="construction" color="grey-6" />
+                    </template>
+                  </q-select>
+                </div>
                 <q-input
                   v-model="form.website"
                   filled
@@ -543,6 +560,7 @@ export default {
       default_hourly_rate: 65,
       quote_validity_days: 30,
       quote_prefix: "ANG",
+      trade: "",
     });
     const presetColors = [
       "#1E40AF",
@@ -558,6 +576,18 @@ export default {
       "#9333EA",
       "#1a1a2e",
     ];
+    const tradeOptions = [
+      { label: "🔧 Sanitär, Heizung, Klima (SHK)", value: "shk" },
+      { label: "⚡ Elektro", value: "elektro" },
+      { label: "🎨 Maler & Lackierer", value: "maler" },
+      { label: "🧱 Trockenbau & Innenausbau", value: "trockenbau" },
+      { label: "🪟 Fliesen & Naturstein", value: "fliesen" },
+      { label: "🪚 Schreiner & Tischler", value: "schreiner" },
+      { label: "🏠 Dachdecker", value: "dachdecker" },
+      { label: "🌿 Garten & Landschaftsbau", value: "gartenbau" },
+      { label: "❄️ Kälte & Klimatechnik", value: "kaelte" },
+      { label: "🔩 Sonstiges Baugewerk", value: "sonstiges" },
+    ];
     const loadCompany = async () => {
       loading.value = true;
       try {
@@ -566,8 +596,7 @@ export default {
         Object.keys(form).forEach((k) => {
           if (c[k] !== null && c[k] !== undefined) form[k] = c[k];
         });
-        if (c.logo_path)
-          logoPreview.value = `/storage/${c.logo_path}`;
+        if (c.logo_path) logoPreview.value = `/storage/${c.logo_path}`;
       } catch (e) {
         console.error(e);
       } finally {
@@ -677,6 +706,7 @@ export default {
       onLogoSelected,
       onRemoveLogo,
       formatDate,
+      tradeOptions,
     };
   },
 };

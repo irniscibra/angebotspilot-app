@@ -27,6 +27,7 @@ class CompanyController extends Controller
 
         $request->validate([
             'name' => 'sometimes|string|max:255',
+            'trade' => 'nullable|string|max:100',
             'address_street' => 'nullable|string|max:255',
             'address_zip' => 'nullable|string|max:10',
             'address_city' => 'nullable|string|max:100',
@@ -46,7 +47,7 @@ class CompanyController extends Controller
             'name', 'address_street', 'address_zip', 'address_city',
             'phone', 'email', 'website', 'tax_id', 'trade_register',
             'primary_color', 'default_vat_rate', 'default_hourly_rate',
-            'quote_validity_days', 'quote_prefix',
+            'quote_validity_days', 'quote_prefix','trade'
         ]));
 
         return response()->json([

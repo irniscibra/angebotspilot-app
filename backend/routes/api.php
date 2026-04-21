@@ -46,6 +46,7 @@ use App\Http\Controllers\Api\QuoteImportController;
     Route::post('quotes/{quote}/regenerate', [QuoteController::class, 'regenerate']);
     Route::post('quotes/{quote}/send', [QuoteController::class, 'send']);
     Route::post('quotes/{quote}/duplicate', [QuoteController::class, 'duplicate']);
+    Route::post('quotes/{quote}/price-check', [QuoteController::class, 'priceCheck']); //KI Angebot analyse
 
     // Angebots-Positionen
     Route::post('quotes/{quote}/items', [QuoteController::class, 'addItem']);
