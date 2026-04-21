@@ -760,7 +760,7 @@ Antworte NUR mit validem JSON Array ohne Kommentare oder Erklärungen:
             ])->timeout(60)->post('https://api.openai.com/v1/chat/completions', [
                 'model'       => 'gpt-4o',
                 'messages'    => [['role' => 'user', 'content' => $prompt]],
-                'max_tokens'  => 4000,
+                'max_tokens'  => 16000,
                 'temperature' => 0.1,
             ]);
 
