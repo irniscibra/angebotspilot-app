@@ -116,6 +116,18 @@
         </div>
       </q-card-section>
 
+      <div style="margin-top: -8px">
+        <q-btn
+          class="q-ma-md"
+          no-caps
+          icon="link"
+          color="primary"
+          label="Online-Link zum Annehmen einfügen"
+          :loading="generatingLink"
+          @click="onInsertLink"
+        />
+      </div>
+
       <!-- Actions -->
       <q-card-actions
         align="right"
@@ -239,7 +251,28 @@ export default {
       }
     };
 
-    return { form, sending, formatPrice, onSend };
+    const generatingLink = ref(false);
+
+    const onInsertLink = async () => {
+      generatingLink.value = true;
+      try {
+        const res = await api.post(`/quotes/${props.quote.id}/generate-link`);
+        const link = res.data.url;
+        const linkText = `Sie können das Angebot bequem online einsehen und digital annehmen:\n👉 ${link}`;
+        form.value.message = form.value.message
+          ? form.value.message + "\n\n" + linkText
+          : linkText;
+      } catch (e) {
+        $q.notify({
+          type: "negative",
+          message: "Link konnte nicht generiert werden",
+        });
+      } finally {
+        generatingLink.value = false;
+      }
+    };
+
+    return { form, sending, formatPrice, onSend, onInsertLink };
   },
 };
 </script>

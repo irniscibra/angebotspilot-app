@@ -13,6 +13,7 @@ use App\Http\Controllers\Api\AcceptanceProtocolController;
 use App\Http\Controllers\Api\InvoiceController;
 use App\Http\Controllers\Api\DashboardController;
 use App\Http\Controllers\Api\QuoteImportController;
+use App\Http\Controllers\Api\PublicQuoteController;
 
 /*
 |--------------------------------------------------------------------------
@@ -25,6 +26,11 @@ use App\Http\Controllers\Api\QuoteImportController;
     Route::post('register', [AuthController::class, 'register']);
     Route::post('login', [AuthController::class, 'login']);
 });
+
+ //Angebot als link an Kunden senden ohne Registrierung
+    Route::get('public/quotes/{uuid}', [PublicQuoteController::class, 'show']);
+    Route::post('public/quotes/{uuid}/accept', [PublicQuoteController::class, 'accept']);
+    Route::post('public/quotes/{uuid}/reject', [PublicQuoteController::class, 'reject']);
 
 // ── Geschützte Routen (Sanctum) ──
     Route::middleware('auth:sanctum')->group(function () {
@@ -52,6 +58,9 @@ use App\Http\Controllers\Api\QuoteImportController;
     Route::post('quotes/{quote}/items', [QuoteController::class, 'addItem']);
     Route::put('quotes/{quote}/items/{item}', [QuoteController::class, 'updateItem']);
     Route::delete('quotes/{quote}/items/{item}', [QuoteController::class, 'deleteItem']);
+
+    //Link generieren für angebot digital unterschrift
+    Route::post('quotes/{quote}/generate-link', [PublicQuoteController::class, 'generateLink']);
 
     // Kunden
     Route::apiResource('customers', CustomerController::class);

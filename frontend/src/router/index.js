@@ -7,6 +7,11 @@ import {
 } from "vue-router";
 
 const routes = [
+      {
+        path: '/angebot/:uuid',
+        component: () => import('pages/PublicQuoteView.vue'),
+        meta: { public: true }
+    },
   {
     path: "/auth",
     component: () => import("layouts/AuthLayout.vue"),
@@ -95,6 +100,7 @@ const routes = [
         name: "invoice-detail",
         component: () => import("pages/InvoiceDetailPage.vue"),
       },
+  
     ],
   },
   {

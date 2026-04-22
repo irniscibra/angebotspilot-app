@@ -83,11 +83,17 @@
                     <q-item-section>Rechnung erstellen</q-item-section>
                   </q-item>
                   <q-item clickable @click="showPriceCheck = true">
-  <q-item-section avatar>
-    <q-icon name="analytics" color="primary" />
-  </q-item-section>
-  <q-item-section>KI-Preisanalyse</q-item-section>
-</q-item>
+                    <q-item-section avatar>
+                      <q-icon name="analytics" color="primary" />
+                    </q-item-section>
+                    <q-item-section>KI-Preisanalyse</q-item-section>
+                  </q-item>
+                  <q-item clickable @click="onShareLink">
+                    <q-item-section avatar>
+                      <q-icon name="link" color="green" />
+                    </q-item-section>
+                    <q-item-section>Online-Link teilen</q-item-section>
+                  </q-item>
                 </q-list>
               </q-menu>
             </q-btn>
@@ -1632,6 +1638,13 @@ export default {
       const t = localStorage.getItem("auth_token");
       window.open(`/api/quotes/${quote.value.id}/pdf?token=${t}`, "_blank");
     };
+    //Link mit angebot versenden
+    const onShareLink = async () => {
+  const res = await api.post(`/quotes/${quote.value.id}/generate-link`)
+  const url = res.data.url
+  await navigator.clipboard.writeText(url)
+  $q.notify({ type: 'positive', message: 'Link kopiert! ' + url, timeout: 5000 })
+}
 
     return {
       loading,
@@ -1685,6 +1698,7 @@ export default {
       onSaveAsTemplate,
       showSendDialog,
       showPriceCheck,
+      onShareLink,
     };
   },
 };
