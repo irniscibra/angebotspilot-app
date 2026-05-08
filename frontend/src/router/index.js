@@ -100,7 +100,11 @@ const routes = [
         name: "invoice-detail",
         component: () => import("pages/InvoiceDetailPage.vue"),
       },
-  
+      {
+        path: "mahnwesen",
+        name: "mahnwesen",
+        component: () => import("pages/MahnungPage.vue"),
+      },
     ],
   },
   {

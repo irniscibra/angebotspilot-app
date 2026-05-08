@@ -33,6 +33,15 @@ class Company extends Model
         'invoice_prefix',
         'next_invoice_number',
         'default_payment_days',
+        'mahnung_prefix',
+        'next_mahnung_number',
+        'mahnung_fee_level1',
+        'mahnung_fee_level2',
+        'mahnung_fee_level3',
+        'mahnung_interest_rate',
+        'mahnung_days_level1',
+        'mahnung_days_level2',
+        'mahnung_days_level3',
         'bank_name',
         'bank_iban',
         'bank_bic',
@@ -46,7 +55,11 @@ class Company extends Model
         'default_vat_rate' => 'decimal:2',
         'default_hourly_rate' => 'decimal:2',
         'trial_ends_at' => 'datetime',
-        'is_small_business' => 'boolean',
+        'is_small_business'    => 'boolean',
+        'mahnung_fee_level1'   => 'decimal:2',
+        'mahnung_fee_level2'   => 'decimal:2',
+        'mahnung_fee_level3'   => 'decimal:2',
+        'mahnung_interest_rate' => 'decimal:2',
     ];
 
     protected static function booted(): void
@@ -106,6 +119,11 @@ class Company extends Model
     public function invoices()
     {
         return $this->hasMany(Invoice::class);
+    }
+
+    public function mahnungen()
+    {
+        return $this->hasMany(\App\Models\Mahnung::class);
     }
 
     // ---- Business Logic ----

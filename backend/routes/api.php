@@ -14,6 +14,8 @@ use App\Http\Controllers\Api\InvoiceController;
 use App\Http\Controllers\Api\DashboardController;
 use App\Http\Controllers\Api\QuoteImportController;
 use App\Http\Controllers\Api\PublicQuoteController;
+use App\Http\Controllers\Api\DatevExportController;
+use App\Http\Controllers\Api\MahnungController;
 
 /*
 |--------------------------------------------------------------------------
@@ -98,6 +100,10 @@ Route::apiResource('materials', MaterialController::class);
 });
 //rechnungen
     Route::prefix('invoices')->group(function () {
+
+    // DATEV Export
+    Route::get('/datev-export', [DatevExportController::class, 'export']);
+
     Route::get('/', [InvoiceController::class, 'index']);
     Route::post('/', [InvoiceController::class, 'store']);
     Route::post('/from-quote', [InvoiceController::class, 'createFromQuote']);
@@ -156,4 +162,16 @@ Route::prefix('service-templates')->group(function () {
     // });
 
     Route::get('dashboard', [DashboardController::class, 'index']);
+
+    // Mahnwesen
+    Route::prefix('mahnungen')->group(function () {
+        Route::get('/', [MahnungController::class, 'index']);
+        Route::get('/overdue-invoices', [MahnungController::class, 'overdueInvoices']);
+        Route::post('/', [MahnungController::class, 'store']);
+        Route::get('/{mahnung}', [MahnungController::class, 'show']);
+        Route::post('/{mahnung}/send', [MahnungController::class, 'send']);
+        Route::get('/{mahnung}/pdf', [MahnungController::class, 'downloadPdf']);
+        Route::post('/{mahnung}/paid', [MahnungController::class, 'markAsPaid']);
+        Route::post('/{mahnung}/cancel', [MahnungController::class, 'cancel']);
+    });
 });

@@ -88,6 +88,7 @@ export default {
       { label: 'Neues Angebot', icon: 'add_circle', to: '/quotes/create' },
       { label: 'Angebote', icon: 'description', to: '/quotes' },
       { label: 'Rechnungen', icon: 'receipt_long', to: '/invoices' },
+      { label: 'Mahnwesen', icon: 'warning', to: '/mahnwesen' },
       { label: 'Protokolle', icon: 'assignment_turned_in', to: '/protokolle' },
       { label: 'Kunden', icon: 'people', to: '/customers' },
       { label: 'Materialkatalog', icon: 'inventory_2', to: '/materials' },
