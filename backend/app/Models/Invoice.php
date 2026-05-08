@@ -111,6 +111,11 @@ class Invoice extends Model
         return $this->belongsTo(Invoice::class, 'cancelled_by_invoice_id');
     }
 
+    public function mahnungen()
+    {
+        return $this->hasMany(\App\Models\Mahnung::class)->orderBy('level');
+    }
+
     // Andere Rechnungen zum selben Angebot (für Abschlagsrechnungen)
     public function relatedInvoices()
     {
