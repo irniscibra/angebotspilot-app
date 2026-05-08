@@ -22,10 +22,16 @@ api.interceptors.request.use((config) => {
 api.interceptors.response.use(
   (response) => response,
   (error) => {
-
     if (error.response && error.response.status === 401) {
       localStorage.removeItem('auth_token')
       localStorage.removeItem('user')
+    }
+
+    // 402: Trial abgelaufen → Upgrade-Seite
+    if (error.response && error.response.status === 402) {
+      if (window.location.pathname !== '/upgrade') {
+        window.location.href = '/upgrade'
+      }
     }
 
     return Promise.reject(error)

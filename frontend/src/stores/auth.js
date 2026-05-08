@@ -13,6 +13,33 @@ export const useAuthStore = defineStore('auth', {
     isLoggedIn: (state) => !!state.token,
     company: (state) => state.user?.company || null,
     userName: (state) => state.user?.name || '',
+
+    // Trial-Status
+    trialEndsAt: (state) => state.user?.company?.trial_ends_at || null,
+    plan: (state) => state.user?.company?.plan || 'trial',
+
+    trialDaysLeft: (state) => {
+      const endsAt = state.user?.company?.trial_ends_at
+      if (!endsAt) return 0
+      const diff = new Date(endsAt) - new Date()
+      return Math.max(0, Math.ceil(diff / (1000 * 60 * 60 * 24)))
+    },
+
+    trialExpired: (state) => {
+      const company = state.user?.company
+      if (!company) return false
+      if (['starter', 'professional', 'enterprise'].includes(company.plan)) return false
+      if (!company.trial_ends_at) return false
+      return new Date(company.trial_ends_at) < new Date()
+    },
+
+    hasActiveSubscription: (state) => {
+      const company = state.user?.company
+      if (!company) return false
+      if (['starter', 'professional', 'enterprise'].includes(company.plan)) return true
+      if (company.plan === 'trial' && new Date(company.trial_ends_at) > new Date()) return true
+      return false
+    },
   },
 
   actions: {

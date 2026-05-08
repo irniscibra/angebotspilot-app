@@ -37,9 +37,12 @@ use App\Http\Controllers\Api\MahnungController;
 // ── Geschützte Routen (Sanctum) ──
     Route::middleware('auth:sanctum')->group(function () {
 
-    // Auth
+    // Auth-Routen: KEIN Subscription-Check (immer erreichbar)
     Route::post('auth/logout', [AuthController::class, 'logout']);
     Route::get('auth/me', [AuthController::class, 'me']);
+
+    // ── App-Routen: Subscription-Check aktiv ──
+    Route::middleware('check.subscription')->group(function () {
 
     // PDF Import für Angebote
     Route::post('quotes/import-pdf', [QuoteImportController::class, 'importFromPdf']);
@@ -174,4 +177,6 @@ Route::prefix('service-templates')->group(function () {
         Route::post('/{mahnung}/paid', [MahnungController::class, 'markAsPaid']);
         Route::post('/{mahnung}/cancel', [MahnungController::class, 'cancel']);
     });
+
+    }); // Ende check.subscription
 });
