@@ -62,6 +62,18 @@
           @click="onLogout"><q-tooltip>Abmelden</q-tooltip></q-btn>
       </div>
     </q-drawer>
+    <!-- Trial Banner -->
+    <div v-if="authStore.plan === 'trial' && authStore.trialDaysLeft <= 5 && authStore.trialDaysLeft > 0"
+      :style="`background: ${authStore.trialDaysLeft <= 1 ? '#fef2f2' : authStore.trialDaysLeft <= 3 ? '#fffbeb' : '#eff6ff'}; border-bottom: 1px solid ${authStore.trialDaysLeft <= 1 ? '#fca5a5' : authStore.trialDaysLeft <= 3 ? '#fcd34d' : '#bfdbfe'}; padding: 10px 20px; display: flex; align-items: center; justify-content: space-between; font-size: 14px;`">
+      <span :style="`color: ${authStore.trialDaysLeft <= 1 ? '#dc2626' : authStore.trialDaysLeft <= 3 ? '#92400e' : '#1e40af'}; font-weight: 600;`">
+        ⏳ Noch {{ authStore.trialDaysLeft }} {{ authStore.trialDaysLeft === 1 ? 'Tag' : 'Tage' }} im kostenlosen Test
+      </span>
+      <router-link to="/upgrade"
+        :style="`background: ${authStore.trialDaysLeft <= 3 ? '#dc2626' : '#1d4ed8'}; color: white; padding: 6px 16px; border-radius: 6px; text-decoration: none; font-size: 13px; font-weight: 600;`">
+        Jetzt upgraden →
+      </router-link>
+    </div>
+
     <q-page-container style="background: #f6f9fc">
       <router-view />
     </q-page-container>

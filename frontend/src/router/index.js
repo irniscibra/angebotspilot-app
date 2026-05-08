@@ -5,6 +5,7 @@ import {
   createWebHistory,
   createWebHashHistory,
 } from "vue-router";
+import { useAuthStore } from "src/stores/auth";
 
 const routes = [
       {
@@ -105,6 +106,12 @@ const routes = [
         name: "mahnwesen",
         component: () => import("pages/MahnungPage.vue"),
       },
+      {
+        path: "upgrade",
+        name: "upgrade",
+        component: () => import("pages/UpgradePage.vue"),
+        meta: { requiresAuth: true, skipSubscriptionCheck: true },
+      },
     ],
   },
   {
@@ -129,14 +136,31 @@ export default route(function () {
   Router.beforeEach((to, from, next) => {
     const token = localStorage.getItem("auth_token");
     const requiresAuth = to.matched.some((record) => record.meta.requiresAuth);
+    const skipSubscriptionCheck = to.matched.some((record) => record.meta.skipSubscriptionCheck);
 
+    // Nicht eingeloggt → Login
     if (requiresAuth && !token) {
       next({ name: "login" });
-    } else if (token && (to.name === "login" || to.name === "register")) {
-      next({ name: "dashboard" });
-    } else {
-      next();
+      return;
     }
+
+    // Eingeloggt aber auf Login/Register → Dashboard
+    if (token && (to.name === "login" || to.name === "register")) {
+      next({ name: "dashboard" });
+      return;
+    }
+
+    // Trial abgelaufen → Upgrade (außer wenn schon auf Upgrade-Seite)
+    // Liest aus dem Pinia-Store (wurde vom auth-Boot-File bereits aktualisiert)
+    if (token && !skipSubscriptionCheck && to.name !== "upgrade") {
+      const authStore = useAuthStore();
+      if (authStore.trialExpired) {
+        next({ name: "upgrade" });
+        return;
+      }
+    }
+
+    next();
   });
 
   return Router;

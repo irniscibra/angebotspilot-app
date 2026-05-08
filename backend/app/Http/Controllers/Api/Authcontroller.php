@@ -13,66 +13,76 @@ use Illuminate\Validation\Rules;
 class AuthController extends Controller
 {
     /**
-     * Registrierung: Erstellt User + Company.
+     * Registrierung: Erstellt User + Company, sendet Verifikations-E-Mail.
+     * Gibt KEINEN Token zurück – erst nach E-Mail-Bestätigung kann man sich einloggen.
      */
     public function register(Request $request): JsonResponse
     {
         $request->validate([
-            'invite_code' => 'required|string',
-            'name' => 'required|string|max:255',
-            'email' => 'required|string|email|max:255|unique:users',
-            'password' => ['required', 'confirmed', Rules\Password::defaults()],
+            'invite_code'  => 'required|string',
+            'name'         => 'required|string|max:255',
+            'email'        => 'required|string|email|max:255|unique:users',
+            'password'     => ['required', 'confirmed', Rules\Password::defaults()],
             'company_name' => 'required|string|max:255',
         ]);
 
-                // Einladungscode prüfen
+        // Einladungscode prüfen
         if ($request->invite_code !== env('INVITE_CODE', 'PILOT2026')) {
             return response()->json([
                 'message' => 'Ungültiger Einladungscode.',
-                'errors' => ['invite_code' => ['Der Einladungscode ist ungültig.']],
+                'errors'  => ['invite_code' => ['Der Einladungscode ist ungültig.']],
             ], 422);
         }
-
 
         // Firma erstellen
         $company = Company::create([
             'name' => $request->company_name,
         ]);
 
-        // User erstellen und Firma zuweisen
+        // User erstellen (noch nicht verifiziert)
         $user = User::create([
             'company_id' => $company->id,
-            'name' => $request->name,
-            'email' => $request->email,
-            'password' => Hash::make($request->password),
-            'role' => 'owner',
+            'name'       => $request->name,
+            'email'      => $request->email,
+            'password'   => Hash::make($request->password),
+            'role'       => 'owner',
         ]);
 
-        // API Token erstellen
-        $token = $user->createToken('auth-token')->plainTextToken;
+        // Verifikations-E-Mail senden
+        $user->sendEmailVerificationNotification();
 
         return response()->json([
-            'user' => $user->load('company'),
-            'token' => $token,
+            'message'             => 'Registrierung erfolgreich. Bitte bestätigen Sie Ihre E-Mail-Adresse.',
+            'email_verification_sent' => true,
+            'email'               => $user->email,
         ], 201);
     }
 
     /**
-     * Login: Gibt User + Token zurück.
+     * Login: Prüft Credentials + E-Mail-Verifikation.
      */
     public function login(Request $request): JsonResponse
     {
         $request->validate([
-            'email' => 'required|email',
+            'email'    => 'required|email',
             'password' => 'required',
         ]);
 
         $user = User::where('email', $request->email)->first();
 
-        if (!$user || !Hash::check($request->password, $user->password)) {
+        if (! $user || ! Hash::check($request->password, $user->password)) {
             return response()->json([
                 'message' => 'Die eingegebenen Anmeldedaten sind ungültig.',
             ], 401);
+        }
+
+        // E-Mail noch nicht bestätigt
+        if (! $user->hasVerifiedEmail()) {
+            return response()->json([
+                'message'           => 'Bitte bestätigen Sie zuerst Ihre E-Mail-Adresse. Schauen Sie in Ihren Posteingang.',
+                'email_not_verified' => true,
+                'email'             => $user->email,
+            ], 403);
         }
 
         // Alte Tokens löschen
@@ -81,7 +91,7 @@ class AuthController extends Controller
         $token = $user->createToken('auth-token')->plainTextToken;
 
         return response()->json([
-            'user' => $user->load('company'),
+            'user'  => $user->load('company'),
             'token' => $token,
         ]);
     }

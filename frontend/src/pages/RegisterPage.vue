@@ -34,8 +34,37 @@
         </div>
       </div>
 
-      <!-- Rechts: Formular -->
+      <!-- Rechts: Formular oder Bestätigungshinweis -->
       <div class="form-side">
+
+        <!-- ✅ E-Mail gesendet -->
+        <div v-if="emailSent" class="verify-sent">
+          <div class="verify-icon">✉️</div>
+          <h2 class="verify-title">Bitte bestätigen Sie Ihre E-Mail</h2>
+          <p class="verify-text">
+            Wir haben eine Bestätigungs-E-Mail an<br>
+            <strong>{{ registeredEmail }}</strong><br>
+            gesendet. Klicken Sie auf den Link in der E-Mail, um Ihr Konto zu aktivieren.
+          </p>
+          <div class="verify-note">
+            ⏱ Der Link ist 24 Stunden gültig.
+          </div>
+          <q-btn
+            flat
+            color="primary"
+            label="E-Mail erneut senden"
+            :loading="resendLoading"
+            @click="resendVerification"
+            class="q-mt-md"
+          />
+          <div class="login-hint q-mt-md">
+            Bereits bestätigt?
+            <router-link to="/auth/login" class="login-link">Anmelden</router-link>
+          </div>
+        </div>
+
+        <!-- Registrierungsformular -->
+        <template v-else>
         <div class="form-header">
           <h5 class="form-title">Konto erstellen</h5>
           <p class="form-sub">14 Tage kostenlos · Keine Kreditkarte nötig</p>
@@ -165,6 +194,7 @@
           </div>
 
         </q-form>
+        </template>
       </div>
 
     </div>
@@ -175,14 +205,13 @@
 <script>
 import { ref } from 'vue'
 import { useAuthStore } from 'src/stores/auth'
-import { useRouter } from 'vue-router'
 import { useQuasar } from 'quasar'
+import { api } from 'src/boot/axios'
 
 export default {
   name: 'RegisterPage',
   setup() {
     const authStore = useAuthStore()
-    const router = useRouter()
     const $q = useQuasar()
 
     const name = ref('')
@@ -193,6 +222,11 @@ export default {
     const passwordConfirm = ref('')
     const loading = ref(false)
     const agbAccepted = ref(false)
+
+    // Nach der Registrierung
+    const emailSent = ref(false)
+    const registeredEmail = ref('')
+    const resendLoading = ref(false)
 
     const features = [
       { icon: 'bolt', text: 'KI-Angebote in unter 20 Sekunden' },
@@ -210,7 +244,7 @@ export default {
 
       loading.value = true
       try {
-        await authStore.register({
+        const data = await authStore.register({
           name: name.value,
           invite_code: inviteCode.value,
           company_name: companyName.value,
@@ -218,7 +252,9 @@ export default {
           password: password.value,
           password_confirmation: passwordConfirm.value,
         })
-        router.push('/dashboard')
+        // Kein Token – Verifikations-E-Mail wurde gesendet
+        registeredEmail.value = data.email || email.value
+        emailSent.value = true
       } catch (e) {
         $q.notify({
           type: 'negative',
@@ -229,10 +265,23 @@ export default {
       }
     }
 
+    const resendVerification = async () => {
+      resendLoading.value = true
+      try {
+        await api.post('/auth/email/resend', { email: registeredEmail.value })
+        $q.notify({ type: 'positive', message: 'Bestätigungs-E-Mail wurde erneut gesendet.' })
+      } catch {
+        $q.notify({ type: 'negative', message: 'Fehler beim Senden. Bitte versuchen Sie es später erneut.' })
+      } finally {
+        resendLoading.value = false
+      }
+    }
+
     return {
       name, inviteCode, companyName, email,
       password, passwordConfirm, loading,
       agbAccepted, features, onRegister,
+      emailSent, registeredEmail, resendLoading, resendVerification,
     }
   },
 }
@@ -465,6 +514,41 @@ export default {
   font-weight: 600;
   text-decoration: none;
   margin-left: 4px;
+}
+
+/* E-Mail-Verifikation gesendet */
+.verify-sent {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  padding: 20px 0;
+  flex: 1;
+}
+.verify-icon {
+  font-size: 64px;
+  margin-bottom: 20px;
+}
+.verify-title {
+  font-size: 22px;
+  font-weight: 800;
+  color: #0f172a;
+  margin: 0 0 16px;
+}
+.verify-text {
+  font-size: 15px;
+  color: #475569;
+  line-height: 1.7;
+  margin: 0 0 16px;
+}
+.verify-note {
+  font-size: 13px;
+  color: #94a3b8;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  padding: 10px 20px;
 }
 
 /* Mobile */
