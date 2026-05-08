@@ -5,6 +5,7 @@ import {
   createWebHistory,
   createWebHashHistory,
 } from "vue-router";
+import { useAuthStore } from "src/stores/auth";
 
 const routes = [
       {
@@ -150,16 +151,12 @@ export default route(function () {
     }
 
     // Trial abgelaufen → Upgrade (außer wenn schon auf Upgrade-Seite)
+    // Liest aus dem Pinia-Store (wurde vom auth-Boot-File bereits aktualisiert)
     if (token && !skipSubscriptionCheck && to.name !== "upgrade") {
-      const user = JSON.parse(localStorage.getItem("user") || "null");
-      const company = user?.company;
-      if (company) {
-        const isPaidPlan = ["starter", "professional", "enterprise"].includes(company.plan);
-        const trialExpired = company.plan === "trial" && company.trial_ends_at && new Date(company.trial_ends_at) < new Date();
-        if (!isPaidPlan && trialExpired) {
-          next({ name: "upgrade" });
-          return;
-        }
+      const authStore = useAuthStore();
+      if (authStore.trialExpired) {
+        next({ name: "upgrade" });
+        return;
       }
     }
 
