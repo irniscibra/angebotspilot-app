@@ -15,6 +15,7 @@ use App\Http\Controllers\Api\DashboardController;
 use App\Http\Controllers\Api\QuoteImportController;
 use App\Http\Controllers\Api\PublicQuoteController;
 use App\Http\Controllers\Api\DatevExportController;
+use App\Http\Controllers\Api\EmailVerificationController;
 use App\Http\Controllers\Api\MahnungController;
 
 /*
@@ -24,9 +25,10 @@ use App\Http\Controllers\Api\MahnungController;
 */
 
 // ── Auth (öffentlich) ──
-    Route::prefix('auth')->group(function () {
+Route::prefix('auth')->group(function () {
     Route::post('register', [AuthController::class, 'register']);
     Route::post('login', [AuthController::class, 'login']);
+    Route::post('email/resend', [EmailVerificationController::class, 'resend']);
 });
 
  //Angebot als link an Kunden senden ohne Registrierung

@@ -48,7 +48,7 @@ export const useAuthStore = defineStore('auth', {
       this.error = null
       try {
         const response = await api.post('/auth/register', data)
-        this.setAuth(response.data)
+        // Kein Token mehr – User muss zuerst E-Mail bestätigen
         return response.data
       } catch (err) {
         this.error = err.response?.data?.message || 'Registrierung fehlgeschlagen'
