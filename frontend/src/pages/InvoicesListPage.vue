@@ -16,6 +16,12 @@
         no-caps
         @click="showCreateDialog = true"
       />
+      <q-btn
+        label="DATEV Export"
+        icon="download"
+        @click="exportDatev"
+        no-caps
+      />
     </div>
 
     <!-- Filter -->
@@ -248,6 +254,23 @@
         </q-card-section>
       </q-card>
     </q-dialog>
+
+    <!-- Dialog für Zeitraum -->
+    <q-dialog v-model="datevDialog">
+      <q-card style="min-width: 350px">
+        <q-card-section>
+          <div class="text-h6">DATEV Export</div>
+        </q-card-section>
+        <q-card-section class="q-gutter-md">
+          <q-input v-model="datevFrom" label="Von" type="date" outlined />
+          <q-input v-model="datevTo" label="Bis" type="date" outlined />
+        </q-card-section>
+        <q-card-actions align="right">
+          <q-btn flat label="Abbrechen" v-close-popup />
+          <q-btn label="Exportieren" color="primary" @click="downloadDatev" />
+        </q-card-actions>
+      </q-card>
+    </q-dialog>
   </q-page>
 </template>
 
@@ -256,6 +279,8 @@ import { ref, computed, onMounted, watch } from "vue";
 import { useRouter } from "vue-router";
 import { useQuasar } from "quasar";
 import { api } from "src/boot/axios";
+
+
 
 export default {
   name: "InvoicesListPage",
@@ -294,6 +319,32 @@ export default {
       { label: "Abschlagsrechnung", value: "partial" },
       { label: "Schlussrechnung", value: "final" },
     ];
+
+    // In setup() oder data()
+const datevDialog = ref(false)
+const datevFrom = ref(new Date().getFullYear() + '-01-01')
+const datevTo = ref(new Date().getFullYear() + '-12-31')
+
+function exportDatev() {
+  datevDialog.value = true
+}
+
+async function downloadDatev() {
+  try {
+    const response = await api.get('/invoices/datev-export', {
+      params: { from: datevFrom.value, to: datevTo.value },
+      responseType: 'blob'
+    })
+    const blob = new Blob([response.data], { type: 'text/csv' })
+    const link = document.createElement('a')
+    link.href = URL.createObjectURL(blob)
+    link.download = `DATEV_Export_${datevFrom.value}_${datevTo.value}.csv`
+    link.click()
+    datevDialog.value = false
+  } catch (e) {
+    console.error('DATEV Export Fehler:', e)
+  }
+}
 
     const loadInvoices = async () => {
       loading.value = true;
@@ -442,6 +493,11 @@ export default {
       invoiceStatusColor,
       invoiceStatusLabel,
       invoiceTypeLabel,
+      exportDatev,
+      downloadDatev,
+      datevDialog,
+      datevFrom,
+      datevTo,
     };
   },
 };
