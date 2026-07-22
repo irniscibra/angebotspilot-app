@@ -203,14 +203,24 @@
             v-model="form.category"
             filled
             label="Kategorie *"
-            :options="existingCategories"
+            hint="Vorhandene wählen oder neue eingeben"
+            :options="filteredCategoryOptions"
             use-input
-            new-value-mode="add-unique"
-            @new-value="(val, done) => done(val)"
+            input-debounce="0"
+            emit-value
+            map-options
+            @filter="filterCategoryFn"
             :rules="[(val) => !!val || 'Pflichtfeld']"
             ><template v-slot:prepend
               ><q-icon name="category" color="grey-5" /></template
-          ></q-select>
+            ><template v-slot:no-option
+              ><q-item
+                ><q-item-section class="text-grey">
+                  Tippen zum Anlegen
+                </q-item-section></q-item
+              ></template
+            ></q-select
+          >
           <q-input
             v-model="form.name"
             filled
@@ -351,6 +361,9 @@ export default {
       selectedCategory = ref(null),
       showDialog = ref(false),
       editingMaterial = ref(null);
+
+    const filteredCategoryOptions = ref([]);
+
     const unitOptions = [
       "Stück",
       "Meter",
@@ -422,6 +435,31 @@ export default {
         value: c,
       })),
     ]);
+
+    const resetCategoryOptions = () => {
+      filteredCategoryOptions.value = existingCategories.value.map((c) => ({
+        label: c,
+        value: c,
+      }));
+    };
+
+    const filterCategoryFn = (val, update) => {
+      update(() => {
+        const needle = val.toLowerCase();
+        let opts = existingCategories.value
+          .filter((c) => c.toLowerCase().includes(needle))
+          .map((c) => ({ label: c, value: c }));
+
+        const exactMatch = existingCategories.value.some(
+          (c) => c.toLowerCase() === needle,
+        );
+        if (val && !exactMatch) {
+          opts.push({ label: `"${val}" neu anlegen`, value: val });
+        }
+        filteredCategoryOptions.value = opts;
+      });
+    };
+
     const filteredMaterials = computed(() => {
       let r = materials.value;
       if (selectedCategory.value)
@@ -481,6 +519,7 @@ export default {
       } else {
         Object.assign(form, { ...emptyForm });
       }
+      resetCategoryOptions();
       showDialog.value = true;
     };
     const onSave = async () => {
@@ -555,6 +594,9 @@ export default {
       unitOptions,
       existingCategories,
       categoryOptions,
+      filteredCategoryOptions,
+      filterCategoryFn,
+      resetCategoryOptions,
       filteredMaterials,
       fmtP,
       cMrg,
