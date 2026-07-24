@@ -106,4 +106,62 @@ class CompanyController extends Controller
             'company' => $company->fresh(),
         ]);
     }
+
+
+    /**
+ * Abo kündigen. Setzt NUR Datumsfelder, löscht keinerlei Daten.
+ * Zugriff bleibt bis access_until bestehen (Restlaufzeit, hier: Ende des aktuellen Abrechnungsmonats).
+ */
+public function cancelSubscription(Request $request): JsonResponse
+{
+    $company = $request->user()->company;
+
+    if ($company->isCancelled()) {
+        return response()->json([
+            'message' => 'Das Abo wurde bereits gekündigt.',
+        ], 422);
+    }
+
+    if (!in_array($company->plan, ['starter', 'professional', 'enterprise'])) {
+        return response()->json([
+            'message' => 'Es besteht kein aktives Abo, das gekündigt werden könnte.',
+        ], 422);
+    }
+
+    // Restlaufzeit: bis zum Ende des aktuellen Abrechnungsmonats
+    // (Später mit Stripe: stripe_subscription->current_period_end verwenden)
+    $accessUntil = now()->endOfMonth();
+
+    $company->update([
+        'cancelled_at' => now(),
+        'access_until' => $accessUntil,
+    ]);
+
+    return response()->json([
+        'message' => 'Kündigung bestätigt. Ihr Zugriff bleibt bis ' . $accessUntil->format('d.m.Y') . ' bestehen. Alle Ihre Daten (Angebote, Kunden, Materialien) bleiben danach vollständig erhalten.',
+        'company' => $company->fresh(),
+    ]);
+}
+
+/**
+ * Kündigung zurücknehmen (falls Nutzer es sich anders überlegt, solange Frist noch läuft).
+ */
+public function reactivateSubscription(Request $request): JsonResponse
+{
+    $company = $request->user()->company;
+
+    if (!$company->isCancelled()) {
+        return response()->json(['message' => 'Es liegt keine Kündigung vor.'], 422);
+    }
+
+    $company->update([
+        'cancelled_at' => null,
+        'access_until' => null,
+    ]);
+
+    return response()->json([
+        'message' => 'Kündigung zurückgenommen. Ihr Abo läuft normal weiter.',
+        'company' => $company->fresh(),
+    ]);
+}
 }

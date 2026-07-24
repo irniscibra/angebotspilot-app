@@ -42,6 +42,10 @@ Route::prefix('auth')->group(function () {
     // Auth-Routen: KEIN Subscription-Check (immer erreichbar)
     Route::post('auth/logout', [AuthController::class, 'logout']);
     Route::get('auth/me', [AuthController::class, 'me']);
+     // Abo-Verwaltung: KEIN Subscription-Check (muss auch bei gesperrtem Zugriff erreichbar sein)
+    Route::get('company/subscription', [CompanyController::class, 'show']);
+    Route::post('company/cancel-subscription', [CompanyController::class, 'cancelSubscription']);
+    Route::post('company/reactivate-subscription', [CompanyController::class, 'reactivateSubscription']);
 
     // ── App-Routen: Subscription-Check aktiv ──
     Route::middleware('check.subscription')->group(function () {
