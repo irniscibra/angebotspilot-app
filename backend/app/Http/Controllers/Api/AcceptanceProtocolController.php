@@ -118,7 +118,7 @@ class AcceptanceProtocolController extends Controller
             'defects.*.deadline' => 'nullable|date',
             'notes' => 'nullable|string',
             'agreements' => 'nullable|string',
-            'status' => 'sometimes|in:draft,completed',
+            'status' => 'sometimes|in:draft,completed,signed',
         ]);
 
         $protocol->update($request->only([
