@@ -49,6 +49,9 @@ class Company extends Model
         'is_small_business',
         'plan',
         'trial_ends_at',
+        'subscription_started_at',
+        'cancelled_at',
+        'access_until',
     ];
 
     protected $casts = [
@@ -60,6 +63,10 @@ class Company extends Model
         'mahnung_fee_level2'   => 'decimal:2',
         'mahnung_fee_level3'   => 'decimal:2',
         'mahnung_interest_rate' => 'decimal:2',
+        'trial_ends_at' => 'datetime',
+        'subscription_started_at' => 'datetime',
+        'cancelled_at' => 'datetime',
+        'access_until' => 'datetime',
     ];
 
     protected static function booted(): void
@@ -141,8 +148,24 @@ class Company extends Model
         return $this->plan === 'trial' && $this->trial_ends_at?->isFuture();
     }
 
-    public function hasActiveSubscription(): bool
+
+    public function isCancelled(): bool
     {
-        return in_array($this->plan, ['starter', 'professional', 'enterprise']) || $this->isTrialActive();
+        return $this->cancelled_at !== null;
     }
+   public function isAccessLocked(): bool
+{
+    // Gesperrt, wenn gekündigt UND die Zugriffsfrist abgelaufen ist
+    return $this->isCancelled() && $this->access_until && $this->access_until->isPast();
+}
+
+public function hasActiveSubscription(): bool
+{
+    if ($this->isAccessLocked()) {
+        return false;
+    }
+
+    return in_array($this->plan, ['starter', 'professional', 'enterprise']) || $this->isTrialActive();
+}
+
 }

@@ -485,26 +485,72 @@
                 <q-separator />
                 <div>
                   <div
+                    class="text-grey-5 q-mb-xs"
                     style="
                       font-size: 12px;
                       font-weight: 600;
                       text-transform: uppercase;
-                      color: #64748b;
                     "
-                    class="q-mb-xs"
                   >
                     Abo-Status
                   </div>
-                  <div style="font-size: 14px; color: #0f172a">
+                  <div class="text-white" style="font-size: 14px">
                     {{ planLabel }}
                     <span
                       v-if="authStore.company?.plan === 'trial'"
-                      style="color: #64748b"
+                      class="text-grey-5"
                     >
                       · Endet am
-                      {{ formatDate(authStore.company?.trial_ends_at) }}</span
-                    >
+                      {{ formatDate(authStore.company?.trial_ends_at) }}
+                    </span>
                   </div>
+
+                  <div
+                    v-if="authStore.company?.subscription_started_at"
+                    class="text-grey-5 q-mt-xs"
+                    style="font-size: 13px"
+                  >
+                    Kunde seit
+                    {{ formatDate(authStore.company?.subscription_started_at) }}
+                  </div>
+
+                  <q-banner
+                    v-if="authStore.company?.cancelled_at"
+                    dense
+                    class="q-mt-sm bg-orange-2 text-orange-10"
+                    style="border-radius: 8px"
+                  >
+                    Gekündigt am
+                    {{ formatDate(authStore.company?.cancelled_at) }} · Zugriff
+                    besteht noch bis
+                    {{ formatDate(authStore.company?.access_until) }}
+                    <template v-slot:action>
+                      <q-btn
+                        flat
+                        dense
+                        no-caps
+                        label="Kündigung zurücknehmen"
+                        color="orange-10"
+                        :loading="cancelling"
+                        @click="onReactivate"
+                      />
+                    </template>
+                  </q-banner>
+
+                  <q-btn
+                    v-else-if="
+                      ['starter', 'professional', 'enterprise'].includes(
+                        authStore.company?.plan,
+                      )
+                    "
+                    flat
+                    dense
+                    no-caps
+                    color="negative"
+                    label="Abo kündigen"
+                    class="q-mt-sm q-px-none"
+                    @click="confirmCancel = true"
+                  />
                 </div>
                 <div>
                   <div
@@ -528,6 +574,34 @@
         </q-tab-panel>
       </q-tab-panels>
     </div>
+
+    <q-dialog v-model="confirmCancel" persistent>
+      <q-card dark style="min-width: 400px; border-radius: 14px">
+        <q-card-section class="row items-center">
+          <q-icon name="warning" color="negative" size="28px" class="q-mr-md" />
+          <span style="font-weight: 600; font-size: 16px"
+            >Abo wirklich kündigen?</span
+          >
+        </q-card-section>
+        <q-card-section class="text-grey-4" style="font-size: 14px">
+          Ihr Zugriff bleibt bis zum Ende des aktuellen Abrechnungszeitraums
+          bestehen. Alle Ihre Daten (Angebote, Kunden, Materialien) bleiben
+          danach
+          <strong>vollständig erhalten</strong> und werden nicht gelöscht.
+        </q-card-section>
+        <q-card-actions align="right">
+          <q-btn flat label="Abbrechen" color="grey" v-close-popup />
+          <q-btn
+            unelevated
+            color="negative"
+            label="Ja, kündigen"
+            no-caps
+            :loading="cancelling"
+            @click="onCancelSubscription"
+          />
+        </q-card-actions>
+      </q-card>
+    </q-dialog>
   </q-page>
 </template>
 <script>
@@ -605,8 +679,8 @@ export default {
     };
     const loadAiUsage = async () => {
       try {
-        const r = await api.get("/dashboard/stats");
-        aiUsage.value = r.data.quotes_this_month || 0;
+        const r = await api.get("/dashboard");
+        aiUsage.value = r.data.stats?.quotes_this_month || 0;
       } catch (e) {}
     };
     onMounted(() => {
@@ -690,6 +764,52 @@ export default {
     );
     const formatDate = (val) =>
       val ? new Date(val).toLocaleDateString("de-DE") : "-";
+
+    const confirmCancel = ref(false);
+    const cancelling = ref(false);
+
+    const onCancelSubscription = async () => {
+      cancelling.value = true;
+      try {
+        const res = await api.post("/company/cancel-subscription");
+        if (authStore.user) {
+          authStore.user.company = res.data.company;
+          localStorage.setItem("user", JSON.stringify(authStore.user));
+        }
+        confirmCancel.value = false;
+        $q.notify({
+          type: "positive",
+          message: res.data.message,
+          timeout: 6000,
+        });
+      } catch (e) {
+        $q.notify({
+          type: "negative",
+          message: e.response?.data?.message || "Fehler bei der Kündigung",
+        });
+      } finally {
+        cancelling.value = false;
+      }
+    };
+
+    const onReactivate = async () => {
+      cancelling.value = true;
+      try {
+        const res = await api.post("/company/reactivate-subscription");
+        if (authStore.user) {
+          authStore.user.company = res.data.company;
+          localStorage.setItem("user", JSON.stringify(authStore.user));
+        }
+        $q.notify({ type: "positive", message: res.data.message });
+      } catch (e) {
+        $q.notify({
+          type: "negative",
+          message: e.response?.data?.message || "Fehler",
+        });
+      } finally {
+        cancelling.value = false;
+      }
+    };
     return {
       authStore,
       loading,
@@ -707,6 +827,10 @@ export default {
       onRemoveLogo,
       formatDate,
       tradeOptions,
+      confirmCancel,
+      cancelling,
+      onCancelSubscription,
+      onReactivate,
     };
   },
 };
