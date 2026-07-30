@@ -31,6 +31,12 @@ Route::prefix('auth')->group(function () {
     Route::post('email/resend', [EmailVerificationController::class, 'resend']);
 });
 
+// E-Mail-Verifikation (muss unter /api laufen, damit Nginx sie ans Backend weiterleitet)
+Route::get('/email-verify/{id}/{hash}', [EmailVerificationController::class, 'verify'])
+    ->middleware(['signed', 'throttle:6,1'])
+    ->name('verification.verify');
+
+
  //Angebot als link an Kunden senden ohne Registrierung
     Route::get('public/quotes/{uuid}', [PublicQuoteController::class, 'show']);
     Route::post('public/quotes/{uuid}/accept', [PublicQuoteController::class, 'accept']);
