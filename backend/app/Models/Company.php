@@ -52,6 +52,7 @@ class Company extends Model
         'subscription_started_at',
         'cancelled_at',
         'access_until',
+        'trial_quotes_used',
     ];
 
     protected $casts = [
@@ -147,7 +148,22 @@ class Company extends Model
     {
         return $this->plan === 'trial' && $this->trial_ends_at?->isFuture();
     }
+    
+const TRIAL_QUOTE_LIMIT = 5;
 
+public function trialQuotesRemaining(): int
+{
+    return max(0, self::TRIAL_QUOTE_LIMIT - $this->trial_quotes_used);
+}
+
+public function canGenerateQuote(): bool
+{
+    if (in_array($this->plan, ['starter', 'professional', 'enterprise'])) {
+        return true;
+    }
+
+    return $this->isTrialActive() && $this->trial_quotes_used < self::TRIAL_QUOTE_LIMIT;
+}
 
     public function isCancelled(): bool
     {

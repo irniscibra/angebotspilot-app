@@ -116,20 +116,6 @@
             </q-input>
           </div>
 
-          <div class="field-group">
-            <label class="field-label">Einladungscode</label>
-            <q-input
-              v-model="inviteCode"
-              filled
-              dense
-              placeholder="Einladungscode eingeben"
-              :rules="[(val) => !!val || 'Einladungscode ist erforderlich']"
-              class="custom-input"
-            >
-              <template v-slot:prepend><q-icon name="vpn_key" color="grey-5" size="18px" /></template>
-            </q-input>
-          </div>
-
           <div class="field-row">
             <div class="field-group">
               <label class="field-label">Passwort</label>
@@ -215,7 +201,6 @@ export default {
     const $q = useQuasar()
 
     const name = ref('')
-    const inviteCode = ref('')
     const companyName = ref('')
     const email = ref('')
     const password = ref('')
@@ -246,7 +231,6 @@ export default {
       try {
         const data = await authStore.register({
           name: name.value,
-          invite_code: inviteCode.value,
           company_name: companyName.value,
           email: email.value,
           password: password.value,
@@ -278,7 +262,7 @@ export default {
     }
 
     return {
-      name, inviteCode, companyName, email,
+      name, companyName, email,
       password, passwordConfirm, loading,
       agbAccepted, features, onRegister,
       emailSent, registeredEmail, resendLoading, resendVerification,

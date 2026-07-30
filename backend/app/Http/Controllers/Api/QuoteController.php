@@ -59,6 +59,14 @@ class QuoteController extends Controller
 
         $company = $request->user()->company;
 
+        // Trial-Limit prüfen — nur relevant wenn KI genutzt wird
+    if ($request->input('use_ai', true) && !$company->canGenerateQuote()) {
+        return response()->json([
+            'message' => 'Dein Testzeitraum ist ausgeschöpft — 5 kostenlose Angebote sind erstellt. Upgrade für unbegrenzte Angebote.',
+            'trial_limit_reached' => true,
+        ], 403);
+    }
+
         // Angebot erstellen
         $quote = Quote::create([
             'company_id' => $company->id,
@@ -78,6 +86,10 @@ class QuoteController extends Controller
                 $aiResult = $this->aiService->generateQuote($quote, $request->project_description);
                 $quote->refresh();
                 $quote->load('items');
+
+                if ($company->plan === 'trial') {
+            $company->increment('trial_quotes_used');
+        }
 
                 return response()->json([
                     'quote' => $quote,

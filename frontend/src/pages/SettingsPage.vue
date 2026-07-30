@@ -494,6 +494,33 @@
                   >
                     Abo-Status
                   </div>
+                  <div
+                    v-if="authStore.company?.plan === 'trial'"
+                    class="q-mt-sm"
+                  >
+                    <div class="text-grey-5" style="font-size: 13px">
+                      {{ authStore.company?.trial_quotes_used || 0 }} von 5
+                      kostenlosen Angeboten genutzt
+                    </div>
+                    <q-linear-progress
+                      :value="(authStore.company?.trial_quotes_used || 0) / 5"
+                      color="primary"
+                      track-color="grey-9"
+                      size="6px"
+                      rounded
+                      class="q-mt-xs"
+                      style="max-width: 240px"
+                    />
+                    <q-btn
+                      v-if="(authStore.company?.trial_quotes_used || 0) >= 5"
+                      color="primary"
+                      label="Jetzt upgraden"
+                      no-caps
+                      dense
+                      class="q-mt-sm"
+                      to="/upgrade"
+                    />
+                  </div>
                   <div class="text-white" style="font-size: 14px">
                     {{ planLabel }}
                     <span
@@ -662,7 +689,7 @@ export default {
       { label: "❄️ Kälte & Klimatechnik", value: "kaelte" },
       { label: "🔩 Sonstiges Baugewerk", value: "sonstiges" },
     ];
-    const loadCompany = async () => {
+  const loadCompany = async () => {
       loading.value = true;
       try {
         const r = await api.get("/company");
@@ -671,6 +698,11 @@ export default {
           if (c[k] !== null && c[k] !== undefined) form[k] = c[k];
         });
         if (c.logo_path) logoPreview.value = `/storage/${c.logo_path}`;
+        // authStore aktuell halten, damit trial_quotes_used überall frisch ist
+        if (authStore.user) {
+          authStore.user.company = c;
+          localStorage.setItem("user", JSON.stringify(authStore.user));
+        }
       } catch (e) {
         console.error(e);
       } finally {
