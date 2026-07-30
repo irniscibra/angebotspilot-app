@@ -1,5 +1,49 @@
 <template>
   <q-page class="q-pa-md q-pa-lg-lg">
+    <!-- Trial-Limit erreicht -->
+    <q-dialog v-model="trialLimitDialog" persistent>
+      <q-card
+        class="text-center q-pa-xl"
+        style="
+          min-width: 320px;
+          max-width: 420px;
+          border-radius: 20px;
+          background: #ffffff;
+        "
+      >
+        <q-icon
+          name="rocket_launch"
+          color="primary"
+          size="56px"
+          class="q-mb-md"
+        />
+        <h6 class="q-my-sm" style="font-weight: 700; color: #0f172a">
+          Alle 5 Test-Angebote genutzt!
+        </h6>
+        <p style="color: #64748b; font-size: 14px; line-height: 1.6">
+          Du hast dein kostenloses Kontingent aufgebraucht. Upgrade jetzt für
+          unbegrenzte KI-Angebote.
+        </p>
+        <q-btn
+          color="primary"
+          label="Jetzt upgraden"
+          no-caps
+          class="full-width q-mt-md"
+          size="lg"
+          style="border-radius: 10px; font-weight: 600"
+          @click="goToUpgrade"
+        />
+        <q-btn
+          flat
+          color="grey-7"
+          label="Später"
+          no-caps
+          class="full-width q-mt-sm"
+          v-close-popup
+        />
+      </q-card>
+    </q-dialog>
+
     <!-- KI Loading Dialog -->
     <q-dialog v-model="generating" persistent>
       <q-card
@@ -1076,6 +1120,7 @@ import { useRouter } from "vue-router";
 import { useQuoteStore } from "src/stores/quotes";
 import { useQuasar } from "quasar";
 import { api } from "src/boot/axios";
+import { useAuthStore } from "src/stores/auth";
 
 export default {
   name: "QuoteCreatePage",
@@ -1146,6 +1191,9 @@ export default {
     ];
     let scanPollInterval = null;
     let scanStepInterval = null;
+
+    const authStore = useAuthStore();
+    const trialLimitDialog = ref(false);
 
     // Load data
     const loadCustomers = async () => {
@@ -1259,22 +1307,44 @@ export default {
         });
         aiNotes.value = r.ai_notes || "";
         progress.value = 1;
+
+        // authStore aktuell halten, damit Kontingent-Anzeige überall frisch ist
+        try {
+          const companyRes = await api.get("/company");
+          if (authStore.user) {
+            authStore.user.company = companyRes.data;
+            localStorage.setItem("user", JSON.stringify(authStore.user));
+          }
+        } catch (e) {
+          // nicht kritisch, Angebot ist trotzdem erstellt
+        }
+
         setTimeout(() => {
           generating.value = false;
           quoteCreated.value = true;
         }, 500);
       } catch (e) {
         generating.value = false;
-        $q.notify({
-          type: "negative",
-          message: e.response?.data?.message || "Fehler bei der KI-Erstellung",
-        });
+
+        if (e.response?.data?.trial_limit_reached) {
+          trialLimitDialog.value = true;
+        } else {
+          $q.notify({
+            type: "negative",
+            message:
+              e.response?.data?.message || "Fehler bei der KI-Erstellung",
+          });
+        }
       } finally {
         clearInterval(si);
         clearInterval(pi);
       }
     };
 
+    const goToUpgrade = () => {
+      trialLimitDialog.value = false;
+      router.push("/upgrade");
+    };
     // === Aus Vorlage erstellen ===
     const onCreateFromTemplate = async (tpl) => {
       try {
@@ -1447,47 +1517,46 @@ export default {
       }
     };
 
-   const onImportPdf = async () => {
-  if (!pdfFile.value) return;
-  importingPdf.value = true;
+    const onImportPdf = async () => {
+      if (!pdfFile.value) return;
+      importingPdf.value = true;
 
-  try {
-    // Schritt 1: Quote ID holen (sofort, kein Timeout möglich)
-    const prepareRes = await api.post('/quotes/scan-prepare', {
-      customer_id: selectedCustomer.value || undefined,
-      project_address: address.value || undefined,
-    });
+      try {
+        // Schritt 1: Quote ID holen (sofort, kein Timeout möglich)
+        const prepareRes = await api.post("/quotes/scan-prepare", {
+          customer_id: selectedCustomer.value || undefined,
+          project_address: address.value || undefined,
+        });
 
-    const quoteId = prepareRes.data.quote_id;
+        const quoteId = prepareRes.data.quote_id;
 
-    // Schritt 2: Polling sofort starten mit bekannter Quote ID
-    scanQuoteId.value = quoteId;
-    importingPdf.value = false;
-    scanProcessing.value = true;
-    scanStatusMessage.value = 'PDF wird hochgeladen...';
-    startScanPolling(quoteId);
+        // Schritt 2: Polling sofort starten mit bekannter Quote ID
+        scanQuoteId.value = quoteId;
+        importingPdf.value = false;
+        scanProcessing.value = true;
+        scanStatusMessage.value = "PDF wird hochgeladen...";
+        startScanPolling(quoteId);
 
-    // Schritt 3: PDF hochladen im Hintergrund
-    const formData = new FormData();
-    formData.append('pdf', pdfFile.value);
+        // Schritt 3: PDF hochladen im Hintergrund
+        const formData = new FormData();
+        formData.append("pdf", pdfFile.value);
 
-    await api.post(`/quotes/${quoteId}/scan-upload`, formData, {
-      headers: { 'Content-Type': 'multipart/form-data' },
-      timeout: 300000, // 5 Minuten
-    });
-
-  } catch (e) {
-    // Wenn prepare fehlschlägt
-    if (!scanProcessing.value) {
-      importingPdf.value = false;
-      $q.notify({
-        type: 'negative',
-        message: e.response?.data?.message || 'Fehler beim Import',
-      });
-    }
-    // Wenn upload fehlschlägt aber polling läuft → ignorieren, job läuft trotzdem
-  }
-};
+        await api.post(`/quotes/${quoteId}/scan-upload`, formData, {
+          headers: { "Content-Type": "multipart/form-data" },
+          timeout: 300000, // 5 Minuten
+        });
+      } catch (e) {
+        // Wenn prepare fehlschlägt
+        if (!scanProcessing.value) {
+          importingPdf.value = false;
+          $q.notify({
+            type: "negative",
+            message: e.response?.data?.message || "Fehler beim Import",
+          });
+        }
+        // Wenn upload fehlschlägt aber polling läuft → ignorieren, job läuft trotzdem
+      }
+    };
 
     return {
       quoteStore,
@@ -1534,6 +1603,9 @@ export default {
       onPdfSelect,
       onPdfDrop,
       onImportPdf,
+      authStore,
+      trialLimitDialog,
+      goToUpgrade,
     };
   },
 };
