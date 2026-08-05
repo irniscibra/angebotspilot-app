@@ -1,1 +1,18 @@
-// app global css in SCSS form
+// App Global CSS in SCSS Form
+
+// Fix: Dialoge auf mobilen Browsern - Action-Buttons werden sonst
+// von der mobilen Browser-Toolbar (Adressleiste) verdeckt
+.q-dialog__inner > div {
+  max-height: 90dvh !important;
+}
+
+.q-dialog .q-card {
+  display: flex;
+  flex-direction: column;
+  max-height: 90dvh;
+}
+
+.q-dialog .q-card > .q-card-section:not(:first-child):not(:last-child) {
+  overflow-y: auto;
+  flex: 1;
+}
