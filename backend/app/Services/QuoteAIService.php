@@ -9,6 +9,7 @@ use App\Models\QuoteItem;
 use App\Models\AiUsageLog;
 use Illuminate\Support\Facades\Log;
 use OpenAI\Laravel\Facades\OpenAI;
+use App\Services\TradeReferenceService;
 
 class QuoteAIService
 {
@@ -37,7 +38,7 @@ class QuoteAIService
                 ['role' => 'user', 'content' => $description],
             ],
             'response_format' => ['type' => 'json_object'],
-            'temperature' => 0.3,
+            'temperature' => 0.15,
             'max_tokens' => 4000,
         ]);
 
@@ -73,8 +74,14 @@ class QuoteAIService
             'ai_tokens_used' => $usage->totalTokens,
         ]);
 
+        // Sicherheitsnetz: unrealistisch niedrige KI-Preise korrigieren
+            $aiResult['groups'] = $this->enforceMinimumPrices($aiResult['groups']);
+
+            $aiResult['groups'] = $this->enforceLaborRateSanity($aiResult['groups'], (float) $company->default_hourly_rate);
+
         // Positionen erstellen – mit intelligentem Katalog-Matching
-        $matchLog = $this->createQuoteItems($quote, $aiResult['groups'], $allMaterials);
+            $matchLog = $this->createQuoteItems($quote, $aiResult['groups'], $allMaterials);
+
 
         // Match-Log im Angebot speichern (für Debugging/Transparenz)
         $existingResponse = $quote->ai_response ?? [];
@@ -199,6 +206,8 @@ class QuoteAIService
     {
         $hourlyRate = number_format($company->default_hourly_rate, 2, '.', '');
         $vatRate = number_format($company->default_vat_rate, 2, '.', '');
+        $tradeLabel = TradeReferenceService::getLabel($company->trade);
+        $tradePrices = TradeReferenceService::getPrices($company->trade);
 
         // Katalog-Abschnitt nur wenn Materialien vorhanden
         $catalogSection = '';
@@ -240,22 +249,20 @@ REGELN FÜR DIE KALKULATION:
 8. Bei Heizungsarbeiten: EnEV/GEG Normen berücksichtigen
 9. Bei Sanitärarbeiten: DIN und DVGW Normen berücksichtigen
 
-MATERIALPREISE (Richtwerte netto – NUR verwenden wenn KEIN Katalog-Artikel passt):
-- Kupferrohr 15mm: 10-15 EUR/m
-- Kupferrohr 22mm: 15-20 EUR/m
-- Verbundrohr 16mm: 5-8 EUR/m
-- HT-Rohr DN50: 7-10 EUR/m
-- HT-Rohr DN100: 12-18 EUR/m
-- Standard WC (Villeroy & Boch / Duravit): 300-600 EUR
-- Unterputzspülkasten Geberit: 150-250 EUR
-- Waschtisch Keramik: 200-500 EUR
-- Waschtischarmatur (Hansgrohe/Grohe): 150-350 EUR
-- Duscharmatur Unterputz: 350-600 EUR
-- Duschwanne flach: 250-450 EUR
-- Badewanne Standard: 400-800 EUR
-- Gas-Brennwertgerät (Buderus/Vaillant): 3.000-6.000 EUR
-- Heizkörper Typ 22 (60x100): 200-350 EUR
-- Fußbodenheizung: 30-50 EUR/m²
+GEWERK: {$tradeLabel}
+
+REFERENZPREISE FÜR DIESES GEWERK (Netto, Stand 2026 – NUR verwenden wenn KEIN Katalog-Artikel passt):
+{$tradePrices}
+
+WICHTIG ZU DEN REFERENZPREISEN:
+- Diese Preise sind die verbindliche Grundlage, wenn kein Katalog-Artikel passt.
+- NIEMALS außerhalb dieser Preisspannen kalkulieren, auch nicht bei
+  ungewöhnlichen Formulierungen oder unklaren Einheiten in der Anfrage.
+- Bei Mengen-/Leistungsangaben in kcal oder anderen unüblichen Einheiten:
+  IMMER zuerst in kW umrechnen (1 kW ≈ 860 kcal/h), dann die passende
+  Preisklasse aus der Liste wählen.
+- Bei Unsicherheit über die genaue Größe/Klasse: lieber die MITTLERE
+  Preisklasse ansetzen als einen Wert außerhalb der Spanne zu raten.
 
 STUNDENSÄTZE:
 - Monteur/Geselle: {$hourlyRate} EUR/Std
@@ -399,6 +406,100 @@ PROMPT;
         ]);
 
         return $matchLog;
+    }
+
+    /**
+ * Sicherheitsnetz: Korrigiert KI-Preise, die trotz Prompt-Anweisungen
+ * unrealistisch niedrig ausgefallen sind. Greift NUR bei Positionen
+ * ohne Katalog-Match (echte Katalogpreise werden nie angetastet).
+ */
+private function enforceMinimumPrices(array $groups): array
+{
+    $minimums = [
+        'wärmepumpe' => 6000,
+        'wärmeerzeuger' => 2000,
+        'brennwerttherme' => 2000,
+        'gastherme' => 2000,
+        'pelletheizung' => 8000,
+        'batteriespeicher' => 3000,
+        'wechselrichter' => 800,
+        'photovoltaik' => 100,
+    ];
+
+    foreach ($groups as &$group) {
+        foreach ($group['items'] as &$item) {
+            // Katalog-Positionen nie anfassen - die haben echte, geprüfte Preise
+            if (!empty($item['from_catalog'])) {
+                continue;
+            }
+
+            $titleLower = strtolower($item['title'] ?? '');
+            $price = (float) ($item['unit_price'] ?? 0);
+
+            foreach ($minimums as $keyword => $minPrice) {
+                if (str_contains($titleLower, $keyword) && $price > 0 && $price < $minPrice) {
+                    Log::warning('KI-Preis unter Mindestwert automatisch korrigiert', [
+                        'title' => $item['title'],
+                        'ai_price' => $price,
+                        'corrected_to' => $minPrice,
+                    ]);
+                    $item['unit_price'] = $minPrice;
+                    $item['price_auto_corrected'] = true;
+                    break;
+                }
+            }
+        }
+    }
+
+    return $groups;
+}
+
+/**
+     * Sicherheitsnetz Teil 2: Korrigiert unrealistisch hohe Stundensätze
+     * bei Arbeitspositionen (z.B. wenn die KI einen Pauschalpreis
+     * versehentlich als Stundensatz einträgt).
+     */
+    private function enforceLaborRateSanity(array $groups, float $companyHourlyRate): array
+    {
+        // Realistischer Korridor: 30€ bis 250€/Std deckt auch Meister-Sätze
+        // und Zuschläge ab, aber keine Tausender-Beträge
+        $maxHourlyRate = 250.0;
+        $minHourlyRate = 30.0;
+
+        foreach ($groups as &$group) {
+            foreach ($group['items'] as &$item) {
+                if (($item['type'] ?? '') !== 'labor') {
+                    continue;
+                }
+
+                $unit = strtolower($item['unit'] ?? '');
+                if (!str_contains($unit, 'std')) {
+                    continue; // nur Stunden-basierte Positionen prüfen
+                }
+
+                $price = (float) ($item['unit_price'] ?? 0);
+
+                if ($price > $maxHourlyRate) {
+                    Log::warning('Unrealistischer Stundensatz automatisch korrigiert', [
+                        'title' => $item['title'],
+                        'ai_price' => $price,
+                        'corrected_to' => $companyHourlyRate,
+                    ]);
+                    $item['unit_price'] = $companyHourlyRate;
+                    $item['price_auto_corrected'] = true;
+                } elseif ($price > 0 && $price < $minHourlyRate) {
+                    Log::warning('Zu niedriger Stundensatz automatisch korrigiert', [
+                        'title' => $item['title'],
+                        'ai_price' => $price,
+                        'corrected_to' => $companyHourlyRate,
+                    ]);
+                    $item['unit_price'] = $companyHourlyRate;
+                    $item['price_auto_corrected'] = true;
+                }
+            }
+        }
+
+        return $groups;
     }
 
     /**
