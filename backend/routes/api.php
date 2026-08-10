@@ -17,6 +17,7 @@ use App\Http\Controllers\Api\PublicQuoteController;
 use App\Http\Controllers\Api\DatevExportController;
 use App\Http\Controllers\Api\EmailVerificationController;
 use App\Http\Controllers\Api\MahnungController;
+use App\Http\Controllers\Api\StripeController;
 
 /*
 |--------------------------------------------------------------------------
@@ -42,6 +43,9 @@ Route::get('/email-verify/{id}/{hash}', [EmailVerificationController::class, 've
     Route::post('public/quotes/{uuid}/accept', [PublicQuoteController::class, 'accept']);
     Route::post('public/quotes/{uuid}/reject', [PublicQuoteController::class, 'reject']);
 
+    // Stripe Webhook (öffentlich, Stripe sendet keinen Auth-Token)
+    Route::post('stripe/webhook', [StripeController::class, 'webhook']);
+
 // ── Geschützte Routen (Sanctum) ──
     Route::middleware('auth:sanctum')->group(function () {
 
@@ -52,6 +56,7 @@ Route::get('/email-verify/{id}/{hash}', [EmailVerificationController::class, 've
     Route::get('company/subscription', [CompanyController::class, 'show']);
     Route::post('company/cancel-subscription', [CompanyController::class, 'cancelSubscription']);
     Route::post('company/reactivate-subscription', [CompanyController::class, 'reactivateSubscription']);
+    Route::post('stripe/create-checkout-session', [StripeController::class, 'createCheckoutSession']);
 
     // ── App-Routen: Subscription-Check aktiv ──
     Route::middleware('check.subscription')->group(function () {

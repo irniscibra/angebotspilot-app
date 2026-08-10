@@ -53,6 +53,8 @@ class Company extends Model
         'cancelled_at',
         'access_until',
         'trial_quotes_used',
+        'stripe_customer_id',
+        'stripe_subscription_id',
     ];
 
     protected $casts = [

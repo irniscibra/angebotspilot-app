@@ -54,24 +54,23 @@
             <div class="feature-item">✅ Datanorm-Import (Würth, Rexel...)</div>
             <div class="feature-item">✅ Digitale Kundenunterschrift</div>
             <div class="feature-item">✅ Online-Angebotsannahme</div>
-            <div class="feature-item">✅ DATEV-Export</div>
-            <div class="feature-item">✅ Professionelles Mahnwesen</div>
             <div class="feature-item">✅ GoBD-konforme Rechnungen</div>
             <div class="feature-item">✅ Abnahmeprotokolle</div>
             <div class="feature-item">✅ PDF-Generierung</div>
             <div class="feature-item">✅ E-Mail Support</div>
           </div>
 
-          <q-btn
-            color="white"
-            text-color="primary"
-            label="Jetzt abonnieren"
-            unelevated
-            class="full-width q-mt-xl"
-            size="lg"
-            icon-right="arrow_forward"
-            @click="subscribe"
-          />
+      <q-btn
+  color="white"
+  text-color="primary"
+  label="Jetzt abonnieren"
+  unelevated
+  class="full-width q-mt-xl"
+  size="lg"
+  icon-right="arrow_forward"
+  :loading="checkoutLoading"
+  @click="subscribe"
+/>
 
           <div class="guarantee-text">
             🔒 Ihre Daten bleiben sicher · Jederzeit kündbar
@@ -163,13 +162,24 @@
 <script setup>
 import { ref } from 'vue'
 import { useAuthStore } from 'src/stores/auth'
+import { api } from 'src/boot/axios'
+
+const checkoutLoading = ref(false)
 
 const authStore = useAuthStore()
 const comingSoonDialog = ref(false)
 
-function subscribe() {
-  // TODO: Stripe Checkout
-  comingSoonDialog.value = true
+async function subscribe() {
+  checkoutLoading.value = true
+  try {
+    const res = await api.post('/stripe/create-checkout-session')
+    window.location.href = res.data.checkout_url
+  } catch (e) {
+    console.error(e)
+    comingSoonDialog.value = true
+  } finally {
+    checkoutLoading.value = false
+  }
 }
 
 function openMail() {
