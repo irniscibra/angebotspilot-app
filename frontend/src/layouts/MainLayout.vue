@@ -1,27 +1,25 @@
 <template>
   <q-layout view="lHh Lpr lff">
     <!-- NEU: Mobile Header mit Hamburger -->
-<q-header elevated class="bg-white text-dark" style="border-bottom: 1px solid #e2e8f0;" v-if="$q.screen.lt.lg">
-  <q-toolbar style="position: relative; min-height: 58px;">
-    <q-btn flat round dense icon="menu" color="dark" @click="leftDrawerOpen = !leftDrawerOpen" />
-    <div
-      style="
-        position: absolute;
-        left: 50%;
-        top: 50%;
-        transform: translate(-50%, -50%);
-        pointer-events: none;
-      "
+    <!-- Mobile Header: nur Logo, kein Hamburger mehr (Navigation läuft über Bottom-Nav) -->
+    <q-header
+      elevated
+      class="bg-white text-dark"
+      style="border-bottom: 1px solid #e2e8f0"
+      v-if="$q.screen.lt.lg"
     >
-      <img
-        src="~assets/angebotspilot-logo.png"
-        alt="AngebotsPilot"
-        style="height: 46px; width: auto;"
-      />
-    </div>
-  </q-toolbar>
-</q-header>
+      <q-toolbar
+        style="position: relative; min-height: 58px; justify-content: center"
+      >
+        <img
+          src="~assets/angebotspilot-logo.png"
+          alt="AngebotsPilot"
+          style="height: 46px; width: auto"
+        />
+      </q-toolbar>
+    </q-header>
     <q-drawer
+      v-if="!$q.screen.lt.lg"
       v-model="leftDrawerOpen"
       show-if-above
       bordered

@@ -59,6 +59,13 @@
             <span class="more-sheet__item-label">{{ item.label }}</span>
           </router-link>
         </div>
+
+        <div class="more-sheet__divider" />
+
+        <div class="more-sheet__logout" @click="onLogout">
+          <q-icon name="logout" size="18px" color="#ef4444" />
+          <span>Abmelden</span>
+        </div>
       </q-card>
     </q-dialog>
   </div>
@@ -66,13 +73,22 @@
 
 <script>
 import { ref } from "vue";
-import { useRoute } from "vue-router";
+import { useRoute, useRouter } from "vue-router";
+import { useAuthStore } from "src/stores/auth";
 
 export default {
   name: "MobileBottomNav",
   setup() {
     const route = useRoute();
+    const router = useRouter();
+    const authStore = useAuthStore();
     const moreSheetOpen = ref(false);
+
+    const onLogout = async () => {
+      moreSheetOpen.value = false;
+      await authStore.logout();
+      router.push("/auth/login");
+    };
 
     const mainItems = [
       { label: "Home", icon: "dashboard", to: "/dashboard" },
@@ -101,6 +117,7 @@ export default {
       moreItems,
       moreSheetOpen,
       isActive,
+        onLogout,
     };
   },
 };
@@ -234,5 +251,23 @@ export default {
   color: #475569;
   text-align: center;
   line-height: 1.3;
+}
+
+.more-sheet__divider {
+  height: 1px;
+  background: #e2e8f0;
+  margin: 20px 0 8px;
+}
+
+.more-sheet__logout {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 4px;
+  color: #ef4444;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
 }
 </style>
