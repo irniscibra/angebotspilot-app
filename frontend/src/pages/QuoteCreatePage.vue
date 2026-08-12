@@ -1393,7 +1393,15 @@ export default {
         $q.notify({ type: "positive", message: "Leeres Angebot erstellt" });
         router.push(`/quotes/${quote.id}`);
       } catch (e) {
-        $q.notify({ type: "negative", message: "Fehler beim Erstellen" });
+        const backendMessage =
+          e.response?.data?.errors?.project_description?.[0] ||
+          e.response?.data?.message ||
+          "Fehler beim Erstellen des Angebots";
+        $q.notify({
+          type: "negative",
+          message: backendMessage,
+          timeout: 5000,
+        });
       }
     };
 
