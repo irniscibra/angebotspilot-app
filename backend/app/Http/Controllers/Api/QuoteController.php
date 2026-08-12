@@ -50,12 +50,14 @@ class QuoteController extends Controller
      */
     public function store(Request $request): JsonResponse
     {
-        $request->validate([
-            'project_description' => 'required|string|min:10|max:5000',
-            'customer_id' => 'nullable|exists:customers,id',
-            'project_address' => 'nullable|string|max:500',
-            'use_ai' => 'boolean',
-        ]);
+       $request->validate([
+    'project_description' => $request->boolean('use_ai', true)
+        ? 'required|string|min:10|max:5000'
+        : 'required|string|max:5000',
+    'customer_id' => 'nullable|exists:customers,id',
+    'project_address' => 'nullable|string|max:500',
+    'use_ai' => 'boolean',
+]);
 
         $company = $request->user()->company;
 
