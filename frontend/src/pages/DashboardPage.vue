@@ -11,6 +11,7 @@
           icon="add"
           :label="$q.screen.gt.xs ? 'Neues Angebot' : ''"
           no-caps
+          data-tour="new-quote"
           @click="$router.push('/quotes/create')"
           style="border-radius: 10px; font-weight: 600; flex-shrink: 0"
         />
@@ -403,6 +404,7 @@
                   label="KI-Angebot erstellen"
                   class="full-width"
                   no-caps
+                  data-tour="ai-quote-button"
                   @click="$router.push('/quotes/create')"
                   style="border-radius: 8px"
                 />

@@ -109,4 +109,15 @@ class AuthController extends Controller
             'user' => $request->user()->load('company'),
         ]);
     }
+
+     /**
+     * Markiert das Onboarding als abgeschlossen (oder übersprungen).
+     */
+    public function completeOnboarding(Request $request): JsonResponse
+    {
+        $request->user()->update(['onboarding_completed_at' => now()]);
+
+        return response()->json(['message' => 'Onboarding abgeschlossen.']);
+    }
+
 }

@@ -48,6 +48,7 @@ Route::get('/email-verify/{id}/{hash}', [EmailVerificationController::class, 've
     // Auth-Routen: KEIN Subscription-Check (immer erreichbar)
     Route::post('auth/logout', [AuthController::class, 'logout']);
     Route::get('auth/me', [AuthController::class, 'me']);
+    Route::post('auth/complete-onboarding', [AuthController::class, 'completeOnboarding']);
      // Abo-Verwaltung: KEIN Subscription-Check (muss auch bei gesperrtem Zugriff erreichbar sein)
     Route::get('company/subscription', [CompanyController::class, 'show']);
     Route::post('company/cancel-subscription', [CompanyController::class, 'cancelSubscription']);
