@@ -121,10 +121,13 @@ class DatanormParserService
                         }
                         break;
 
-                    case 'B':
+                   case 'B':
                         $bData = $this->parseBRecord($line);
                         if ($bData && !empty($bData['article_number']) && isset($articles[$bData['article_number']])) {
                             $articles[$bData['article_number']]['long_text'] = $bData['long_text'] ?? '';
+                            if (!empty($bData['ean'])) {
+                                $articles[$bData['article_number']]['ean'] = $bData['ean'];
+                            }
                         }
                         break;
 
@@ -238,23 +241,27 @@ class DatanormParserService
     /**
      * Parst einen B-Satz (Langtext).
      */
-    private function parseBRecord(string $line): ?array
-    {
-        if (substr_count($line, ';') >= 2) {
-            $parts = explode(';', $line);
-            return [
-                'article_number' => trim($parts[1] ?? ''),
-                'long_text' => trim($parts[2] ?? ''),
-            ];
-        }
+private function parseBRecord(string $line): ?array
+{
+    $parts = explode(';', $line);
+    if (count($parts) < 3 || strtoupper(trim($parts[0])) !== 'B') return null;
 
-        if (strlen($line) < 17) return null;
+    $productGroup  = trim($parts[1] ?? '');
+    $articleNumber = trim($parts[2] ?? '');
+    $suffix        = trim($parts[3] ?? '');
+    $key = $productGroup . $articleNumber . $suffix;
 
-        return [
-            'article_number' => trim(substr($line, 1, 15)),
-            'long_text' => trim(substr($line, 16)),
-        ];
-    }
+    $ean = trim($parts[9] ?? '');
+
+    $longTextParts = array_slice($parts, 4, 2);
+    $longText = trim(implode(' ', array_filter($longTextParts, fn($p) => trim($p) !== '')));
+
+    return [
+        'article_number' => $key,
+        'long_text' => $longText,
+        'ean' => $ean !== '' ? $ean : null,
+    ];
+}
 
     /**
      * Parst einen P-Satz (Preisdaten).
@@ -302,49 +309,48 @@ class DatanormParserService
     /**
      * Parst semikolon-getrennte Zeilen (Datanorm 5 Format).
      */
-    private function parseDelimitedLine(string $line): ?array
-    {
-        $parts = explode(';', $line);
-        if (count($parts) < 5) return null;
+private function parseDelimitedLine(string $line): ?array
+{
+    $parts = explode(';', $line);
+    if (count($parts) < 9) return null;
 
-        $recordType = strtoupper(trim($parts[0]));
+    $recordType = strtoupper(trim($parts[0]));
+    if ($recordType !== 'A') return null;
 
-        if ($recordType === 'A' || is_numeric(trim($parts[1] ?? ''))) {
-            $offset = ($recordType === 'A') ? 1 : 0;
+    // Reales Format: A;WARENGRUPPE;ARTIKELNUMMER;ERGAENZUNG;KURZTEXT1;KURZTEXT2;MENGENEINHEIT;PREISKENNZEICHEN;EINHEIT;PREIS;RABATTGRUPPE;...
+    $productGroup  = trim($parts[1] ?? '');
+    $articleNumber = trim($parts[2] ?? '');
+    $suffix        = trim($parts[3] ?? '');
+    $shortText1    = trim($parts[4] ?? '');
+    $shortText2    = trim($parts[5] ?? '');
+    $priceFlag     = trim($parts[7] ?? '0');
+    $unit          = trim($parts[8] ?? 'ST');
+    $priceRaw      = trim($parts[9] ?? '0');
+    $discountGroup = trim($parts[10] ?? '');
 
-            $articleNumber = trim($parts[$offset] ?? '');
-            $shortText1 = trim($parts[$offset + 1] ?? '');
-            $shortText2 = trim($parts[$offset + 2] ?? '');
-            $unit = trim($parts[$offset + 3] ?? 'ST');
-            $priceRaw = trim($parts[$offset + 4] ?? '0');
-            $discountGroup = trim($parts[$offset + 5] ?? '');
-            $productGroup = trim($parts[$offset + 6] ?? '');
-            $matchCode = trim($parts[$offset + 7] ?? '');
-            $ean = trim($parts[$offset + 8] ?? '');
+    if (empty($articleNumber)) return null;
 
-            $name = $shortText1;
-            if (!empty($shortText2)) {
-                $name .= ' ' . $shortText2;
-            }
+    // Eindeutiger Key: Warengruppe + Artikelnummer + Ergänzung
+    $key = $productGroup . $articleNumber . $suffix;
 
-            if (empty($articleNumber) || empty($name)) return null;
-
-            return [
-                'article_number' => $articleNumber,
-                'name' => $name,
-                'short_text_1' => $shortText1,
-                'short_text_2' => $shortText2,
-                'unit' => $this->convertUnit($unit),
-                'list_price' => $this->parseDecimalPrice($priceRaw),
-                'discount_group' => $discountGroup,
-                'product_group' => $productGroup,
-                'match_code' => $matchCode,
-                'ean' => !empty($ean) ? $ean : null,
-            ];
-        }
-
-        return null;
+    $name = $shortText1;
+    if (!empty($shortText2)) {
+        $name .= ' ' . $shortText2;
     }
+    if (empty($name)) return null;
+
+    return [
+        'article_number' => $key,
+        'name' => $name,
+        'short_text_1' => $shortText1,
+        'short_text_2' => $shortText2,
+        'unit' => $this->convertUnit($unit),
+        'list_price' => $this->parsePrice($priceRaw, $priceFlag),
+        'discount_group' => $discountGroup,
+        'product_group' => $productGroup,
+        'match_code' => null,
+    ];
+}
 
     /**
      * Konvertiert Preisstring (implizit 2 Dezimalen) in Dezimalwert.
@@ -456,7 +462,11 @@ class DatanormParserService
                         : $grossPrice;
 
                     // Kategorie aus Warengruppe ableiten
+                    // Kategorie aus Warengruppe ableiten, Fallback auf Keyword-Erkennung im Namen
                     $category = $this->mapProductGroupToCategory($article['product_group'] ?? '');
+                    if ($category === 'Sonstiges') {
+                        $category = $this->categorizeByKeywords($article['name']) ?? 'Sonstiges';
+                    }
 
                     $materialData = [
                         'company_id' => $companyId,
@@ -584,6 +594,31 @@ class DatanormParserService
 
         return $categoryMap[$mainGroup] ?? 'Sonstiges';
     }
+
+    private function categorizeByKeywords(string $name): ?string
+{
+    $name = mb_strtolower($name);
+
+    $keywordMap = [
+        'Elektro' => ['kabel', 'kabelkanal', 'kabelrinne', 'kabelleiter', 'zmas', 'abzweig', 'steckdose', 'schalter', 'klemme', 'sicherung', 'fi-schutz', 'leitungsschutz', 'verteiler'],
+        'Sanitär' => ['waschtisch', 'wc', 'spülkasten', 'armatur', 'siphon', 'ablauf', 'dusche', 'badewanne'],
+        'Heizung' => ['heizkörper', 'therme', 'wärmepumpe', 'pufferspeicher', 'warmwasserspeicher', 'thermostatventil', 'heizkreis'],
+        'Rohre & Fittings' => ['rohr', 'fitting', 'bogen', 'muffe', 'reduzier', 'übergang', 'winkel'],
+        'Isolierung' => ['dämmung', 'isolier', 'dämmschelle'],
+        'Befestigungstechnik' => ['schelle', 'dübel', 'gewindestange', 'befestigung'],
+        'Werkzeuge' => ['werkzeug', 'zange', 'schlüssel', 'bohrer'],
+    ];
+
+    foreach ($keywordMap as $category => $keywords) {
+        foreach ($keywords as $keyword) {
+            if (str_contains($name, $keyword)) {
+                return $category;
+            }
+        }
+    }
+
+    return null;
+}
 
     /**
      * Analysiert eine Datanorm-Datei ohne zu importieren (Vorschau).

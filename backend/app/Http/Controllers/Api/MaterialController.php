@@ -142,4 +142,42 @@ class MaterialController extends Controller
 
         return response()->json(['message' => 'Material gelöscht.']);
     }
+
+    public function bulkDestroy(Request $request): JsonResponse
+    {
+        $request->validate([
+            'ids' => 'required_without:all|array|min:1|max:5000',
+            'ids.*' => 'integer',
+            'all' => 'required_without:ids|boolean',
+            'category' => 'nullable|string|max:100',
+            'search' => 'nullable|string|max:100',
+        ]);
+
+        $companyId = $request->user()->company_id;
+        $query = Material::where('company_id', $companyId);
+
+        if ($request->boolean('all')) {
+            if ($request->filled('category')) {
+                $query->where('category', $request->category);
+            }
+            if ($request->filled('search')) {
+                $search = $request->search;
+                $query->where(function ($q) use ($search) {
+                    $q->where('name', 'like', "%{$search}%")
+                      ->orWhere('category', 'like', "%{$search}%")
+                      ->orWhere('sku', 'like', "%{$search}%")
+                      ->orWhere('datanorm_article_number', 'like', "%{$search}%");
+                });
+            }
+        } else {
+            $query->whereIn('id', $request->ids);
+        }
+
+        $deletedCount = $query->delete();
+
+        return response()->json([
+            'message' => "{$deletedCount} Material(ien) gelöscht.",
+            'deleted_count' => $deletedCount,
+        ]);
+    }
 }

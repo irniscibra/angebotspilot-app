@@ -6,15 +6,27 @@
         <h5 class="q-my-none" style="font-weight: 700;">Materialkatalog</h5>
         <p class="text-grey-6 q-mb-none q-mt-xs">{{ materials.length }} Materialien in {{ Object.keys(categories).length }} Kategorien</p>
       </div>
-      <q-btn
-        color="primary"
-        icon="add"
-        label="Material hinzufügen"
-        no-caps
-        @click="openDialog()"
-        :class="$q.screen.lt.sm ? 'full-width' : ''"
-        style="border-radius: 10px; font-weight: 600;"
-      />
+      <div class="row q-gutter-sm" :class="$q.screen.lt.sm ? 'full-width column' : ''">
+        <q-btn
+          v-if="materials.length > 0"
+          flat
+          color="negative"
+          icon="delete_sweep"
+          label="Katalog leeren"
+          no-caps
+          @click="openEmptyCatalogDialog"
+          :class="$q.screen.lt.sm ? 'full-width' : ''"
+        />
+        <q-btn
+          color="primary"
+          icon="add"
+          label="Material hinzufügen"
+          no-caps
+          @click="openDialog()"
+          :class="$q.screen.lt.sm ? 'full-width' : ''"
+          style="border-radius: 10px; font-weight: 600;"
+        />
+      </div>
     </div>
     <div class="row q-gutter-md q-mb-md">
       <q-input
@@ -53,6 +65,28 @@
           v-if="selectedCategory !== cat"
       /></q-chip>
     </div>
+
+    <q-banner
+      v-if="selected.length > 0"
+      rounded
+      class="q-mb-md"
+      style="background: #eff6ff; border: 1px solid #bfdbfe; border-radius: 10px;"
+    >
+      <div class="row items-center">
+        <span style="font-weight: 600; color: #1e40af;">{{ selected.length }} ausgewählt</span>
+        <q-space />
+        <q-btn flat dense color="grey-7" label="Auswahl aufheben" no-caps @click="selected = []" class="q-mr-sm" />
+        <q-btn
+          color="negative"
+          icon="delete"
+          :label="`${selected.length} löschen`"
+          no-caps
+          @click="onBulkDelete"
+          style="border-radius: 8px; font-weight: 600;"
+        />
+      </div>
+    </q-banner>
+
     <q-card
       flat
       style="
@@ -71,6 +105,8 @@
           :pagination="{ rowsPerPage: 25 }"
           @row-click="(evt, row) => openDialog(row)"
           class="cursor-pointer"
+          selection="multiple"
+          v-model:selected="selected"
         >
           <template v-slot:body-cell-name="props"
             ><q-td :props="props"
@@ -340,6 +376,38 @@
         /></q-card-actions>
       </q-card>
     </q-dialog>
+
+    <q-dialog v-model="showEmptyCatalogDialog" persistent>
+      <q-card style="width: 460px; max-width: 95vw; border-radius: 16px">
+        <q-card-section class="row items-center q-pb-sm">
+          <q-icon name="warning" color="negative" size="28px" class="q-mr-sm" />
+          <h6 class="q-my-none" style="font-weight: 700; color: #0f172a;">Katalog leeren</h6>
+        </q-card-section>
+        <q-card-section>
+          <p style="color: #475569; font-size: 14px; line-height: 1.6;">
+            Du bist dabei, <strong>{{ emptyDialogCount }} Material(ien)</strong>
+            <span v-if="selectedCategory"> aus der Kategorie "{{ selectedCategory }}"</span>
+            unwiderruflich zu löschen. Diese Aktion kann nicht rückgängig gemacht werden.
+          </p>
+          <p style="color: #475569; font-size: 13px;">
+            Zum Bestätigen tippe <strong>LÖSCHEN</strong> in das Feld unten:
+          </p>
+          <q-input v-model="emptyDialogConfirmText" filled dense placeholder="LÖSCHEN" autofocus />
+        </q-card-section>
+        <q-card-actions align="right" class="q-pa-md">
+          <q-btn flat label="Abbrechen" color="grey" v-close-popup @click="emptyDialogConfirmText = ''" />
+          <q-btn
+            label="Endgültig löschen"
+            color="negative"
+            no-caps
+            icon="delete_forever"
+            :disable="emptyDialogConfirmText !== 'LÖSCHEN'"
+            :loading="emptyDialogDeleting"
+            @click="onEmptyCatalog"
+          />
+        </q-card-actions>
+      </q-card>
+    </q-dialog>
   </q-page>
 </template>
 <script>
@@ -357,7 +425,11 @@ export default {
       search = ref(""),
       selectedCategory = ref(null),
       showDialog = ref(false),
-      editingMaterial = ref(null);
+      editingMaterial = ref(null),
+      selected = ref([]),
+      showEmptyCatalogDialog = ref(false),
+      emptyDialogConfirmText = ref(""),
+      emptyDialogDeleting = ref(false);
 
     const filteredCategoryOptions = ref([]);
 
@@ -432,6 +504,11 @@ export default {
         value: c,
       })),
     ]);
+    const emptyDialogCount = computed(() =>
+      selectedCategory.value
+        ? categories.value[selectedCategory.value] || 0
+        : materials.value.length,
+    );
 
     const resetCategoryOptions = () => {
       filteredCategoryOptions.value = existingCategories.value.map((c) => ({
@@ -577,6 +654,54 @@ export default {
         }
       });
     };
+
+    const onBulkDelete = () => {
+      const ids = selected.value.map((m) => m.id);
+      if (ids.length === 0) return;
+
+      $q.dialog({
+        title: "Materialien löschen?",
+        message: `${ids.length} Material(ien) wirklich löschen? Das kann nicht rückgängig gemacht werden.`,
+        cancel: true,
+        color: "negative",
+      }).onOk(async () => {
+        try {
+          const res = await api.post("/materials/bulk-delete", { ids });
+          selected.value = [];
+          await loadMaterials();
+          $q.notify({ type: "positive", message: res.data.message || "Materialien gelöscht" });
+        } catch (e) {
+          $q.notify({ type: "negative", message: e.response?.data?.message || "Fehler beim Löschen" });
+        }
+      });
+    };
+
+    const openEmptyCatalogDialog = () => {
+      emptyDialogConfirmText.value = "";
+      showEmptyCatalogDialog.value = true;
+    };
+
+    const onEmptyCatalog = async () => {
+      if (emptyDialogConfirmText.value !== "LÖSCHEN") return;
+      emptyDialogDeleting.value = true;
+      try {
+        const payload = { all: true };
+        if (selectedCategory.value) payload.category = selectedCategory.value;
+        if (search.value) payload.search = search.value;
+
+        const res = await api.post("/materials/bulk-delete", payload);
+        selected.value = [];
+        showEmptyCatalogDialog.value = false;
+        emptyDialogConfirmText.value = "";
+        await loadMaterials();
+        $q.notify({ type: "positive", message: res.data.message || "Katalog geleert" });
+      } catch (e) {
+        $q.notify({ type: "negative", message: e.response?.data?.message || "Fehler beim Löschen" });
+      } finally {
+        emptyDialogDeleting.value = false;
+      }
+    };
+
     return {
       loading,
       saving,
@@ -602,6 +727,14 @@ export default {
       onSave,
       toggleActive,
       onDelete,
+      selected,
+      showEmptyCatalogDialog,
+      emptyDialogConfirmText,
+      emptyDialogDeleting,
+      emptyDialogCount,
+      onBulkDelete,
+      openEmptyCatalogDialog,
+      onEmptyCatalog,
     };
   },
 };

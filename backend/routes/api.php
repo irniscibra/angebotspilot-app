@@ -90,7 +90,8 @@ Route::get('/email-verify/{id}/{hash}', [EmailVerificationController::class, 've
 
 // Materialsuche (Autocomplete)
     Route::get('/materials/search', [MaterialController::class, 'search']);
-
+// Materialien Bulk-Löschung (muss vor apiResource stehen)
+    Route::post('/materials/bulk-delete', [MaterialController::class, 'bulkDestroy']);
 // Materialien
 Route::apiResource('materials', MaterialController::class);
 
