@@ -1,28 +1,32 @@
 <template>
   <q-page class="q-pa-lg" style="background: #f6f9fc">
-    <div class="row items-center q-mb-lg">
-      <div class="col">
-        <h5 class="q-my-none" style="font-weight: 700; color: #0f172a">
-          Rechnungen
-        </h5>
-        <p class="q-mb-none q-mt-xs" style="color: #64748b">
-          Rechnungen erstellen, verwalten und versenden
-        </p>
-      </div>
+ <div class="row items-center q-mb-lg" :class="$q.screen.lt.sm ? 'column items-stretch q-gutter-sm' : ''">
+    <div class="col">
+      <h5 class="q-my-none" style="font-weight: 700; color: #0f172a">
+        Rechnungen
+      </h5>
+      <p class="q-mb-none q-mt-xs" style="color: #64748b">
+        Rechnungen erstellen, verwalten und versenden
+      </p>
+    </div>
+    <div :class="$q.screen.lt.sm ? 'row q-gutter-sm full-width' : 'row q-gutter-sm'">
       <q-btn
         color="primary"
         icon="add"
         label="Neue Rechnung"
         no-caps
         @click="showCreateDialog = true"
+        :class="$q.screen.lt.sm ? 'col' : ''"
       />
       <q-btn
         label="DATEV Export"
         icon="download"
         @click="exportDatev"
         no-caps
+        :class="$q.screen.lt.sm ? 'col' : ''"
       />
     </div>
+  </div>
 
     <!-- Filter -->
     <div class="row q-gutter-sm q-mb-md">

@@ -24,6 +24,23 @@ class TradeReferenceService
         };
     }
 
+    public static function getTagline(?string $trade): string
+{
+    return match($trade) {
+        'shk'        => 'Sanitär · Heizung · Klimatechnik',
+        'elektro'    => 'Elektrotechnik · Installation · Service',
+        'maler'      => 'Maler · Lackierer · Raumgestaltung',
+        'trockenbau' => 'Trockenbau · Innenausbau',
+        'fliesen'    => 'Fliesen · Naturstein · Verlegung',
+        'schreiner'  => 'Schreinerei · Tischlerei · Innenausbau',
+        'dachdecker' => 'Dachdeckerei · Bauklempnerei',
+        'gartenbau'  => 'Garten- und Landschaftsbau',
+        'geruestbau' => 'Gerüstbau',
+        'kaelte'     => 'Kälte- und Klimatechnik',
+        default      => '',
+    };
+}
+
     public static function getLabel(?string $trade): string
     {
         return match($trade) {

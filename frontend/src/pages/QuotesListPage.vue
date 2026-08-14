@@ -1,6 +1,9 @@
 <template>
   <q-page class="q-pa-lg">
-    <div class="row items-center q-mb-lg">
+    <div
+      class="row items-center q-mb-lg"
+      :class="$q.screen.lt.sm ? 'column items-stretch q-gutter-sm' : ''"
+    >
       <div class="col">
         <h5 class="q-my-none" style="font-weight: 700; color: #0f172a">
           Angebote
@@ -15,6 +18,7 @@
         label="Neues Angebot"
         no-caps
         @click="$router.push('/quotes/create')"
+        :class="$q.screen.lt.sm ? 'full-width' : ''"
         style="border-radius: 10px; font-weight: 600"
       />
     </div>
@@ -52,7 +56,7 @@
           >
           <template v-slot:body-cell-actions="props">
             <q-td :props="props">
-              <q-btn flat round dense icon="more_vert" color="grey-6">
+              <q-btn flat round dense icon="more_vert" color="grey-6" @click.stop>
                 <q-menu>
                   <q-list>
                     <q-item

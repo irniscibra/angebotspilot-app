@@ -546,7 +546,7 @@
                 <img src="{{ public_path('storage/' . $company->logo_path) }}" class="logo-img" alt="{{ $company->name }}">
             @else
                 <div class="company-name">{{ $company->name }}</div>
-                <div class="company-tagline">Sanitär · Heizung · Klimatechnik</div>
+               <div class="company-tagline">{{ \App\Services\TradeReferenceService::getTagline($company->trade) }}</div>
             @endif
         </div>
         <div class="header-right">
@@ -639,6 +639,7 @@
     </div>
 
     <!-- POSITIONEN -->
+    <div style="padding: 0 20px;">
     @php $posNr = 1; @endphp
 
     @foreach($groupedItems as $groupName => $items)
@@ -793,6 +794,6 @@
         @if($company->tax_id) · USt-IdNr.: {{ $company->tax_id }}@endif
         @if($company->trade_register) · {{ $company->trade_register }}@endif
     </div>
-
+ </div>
 </body>
 </html>

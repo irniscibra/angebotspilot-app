@@ -1,6 +1,6 @@
 <template>
   <q-page class="q-pa-lg" style="background: #f6f9fc">
-    <div class="row items-center q-mb-lg">
+    <div class="row items-center q-mb-lg" :class="$q.screen.lt.sm ? 'column items-stretch q-gutter-sm' : ''">
       <div class="col">
         <h5 class="q-my-none" style="font-weight: 700; color: #0f172a">
           Leistungsvorlagen
@@ -16,6 +16,7 @@
         label="Neue Vorlage"
         no-caps
         @click="openCreateDialog"
+        :class="$q.screen.lt.sm ? 'full-width' : ''"
       />
     </div>
 

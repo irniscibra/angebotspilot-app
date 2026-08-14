@@ -1,14 +1,10 @@
 <template>
   <q-page class="q-pa-lg">
-    <div class="row items-center q-mb-lg">
+    <!-- Header -->
+    <div class="row items-center q-mb-lg" :class="$q.screen.lt.sm ? 'column items-stretch q-gutter-sm' : ''">
       <div class="col">
-        <h5 class="q-my-none" style="font-weight: 700; color: #0f172a">
-          Materialkatalog
-        </h5>
-        <p class="q-mb-none q-mt-xs" style="color: #64748b">
-          {{ materials.length }} Materialien in
-          {{ Object.keys(categories).length }} Kategorien
-        </p>
+        <h5 class="q-my-none" style="font-weight: 700;">Materialkatalog</h5>
+        <p class="text-grey-6 q-mb-none q-mt-xs">{{ materials.length }} Materialien in {{ Object.keys(categories).length }} Kategorien</p>
       </div>
       <q-btn
         color="primary"
@@ -16,7 +12,8 @@
         label="Material hinzufügen"
         no-caps
         @click="openDialog()"
-        style="border-radius: 10px; font-weight: 600"
+        :class="$q.screen.lt.sm ? 'full-width' : ''"
+        style="border-radius: 10px; font-weight: 600;"
       />
     </div>
     <div class="row q-gutter-md q-mb-md">
