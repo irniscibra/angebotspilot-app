@@ -32,7 +32,7 @@
               @dragover.prevent="isDragover = true"
               @dragleave="isDragover = false"
             >
-              <input ref="fileInput" type="file" accept=".dat,.csv,.txt,.001,.002,.003,.004,.005" @change="onFileSelect" class="hidden" />
+              <input ref="fileInput" type="file" accept=".dat,.csv,.txt,.001,.002,.003,.004,.005,*/*" @change="onFileSelect" class="hidden" />
 
               <div v-if="!selectedFile">
                 <q-icon name="upload_file" size="48px" style="color: #94a3b8;" />
