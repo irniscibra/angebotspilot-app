@@ -12,6 +12,13 @@ use Illuminate\Support\Str;
 class DatanormParserService
 {
     /**
+     * Erkanntes Feld-Layout für semikolon-getrennte Dateien (Datanorm 5).
+     * Wird einmal pro Datei per Stichprobe bestimmt, siehe detectFieldLayout().
+     * 'with_matchcode' = Standard-Layout mit Ergänzungsfeld nach der Artikelnummer.
+     * 'without_matchcode' = Layout ohne dieses Feld (z.B. manche Elitec-Exporte).
+     */
+    private ?string $detectedLayout = null;
+    /**
      * Importiert eine Datanorm-Datei und erstellt/aktualisiert Materialien.
      */
     public function import(DatanormImport $import, string $filePath): DatanormImport
@@ -106,6 +113,67 @@ class DatanormParserService
         return mb_convert_encoding($content, 'UTF-8', 'ISO-8859-1');
     }
 
+     /**
+     * Erkennt anhand einer Stichprobe von A-Sätzen, welches der beiden
+     * unterstützten Datanorm-5-Feld-Layouts diese Datei verwendet.
+     * Dadurch muss nicht pro Zeile geraten werden, und B-Sätze können
+     * konsistent zu den A-Sätzen geschlüsselt werden.
+     */
+    private function detectFieldLayout(array $lines): string
+    {
+        $votesWithMatchcode = 0;
+        $votesWithoutMatchcode = 0;
+        $checked = 0;
+
+        foreach ($lines as $line) {
+            $line = trim($line);
+            if ($line === '' || strtoupper(substr($line, 0, 1)) !== 'A') continue;
+            if (substr_count($line, ';') < 8) continue; // kein Semikolon-Format
+
+            $parts = explode(';', $line);
+
+            // Kandidat "ohne Matchcode": Einheit=parts[5], Preis=parts[8]
+            if ($this->isPlausibleUnit(trim($parts[5] ?? '')) && $this->isPlausiblePrice(trim($parts[8] ?? ''))) {
+                $votesWithoutMatchcode++;
+            }
+            // Kandidat "mit Matchcode": Einheit=parts[8], Preis=parts[9]
+            if ($this->isPlausibleUnit(trim($parts[8] ?? '')) && $this->isPlausiblePrice(trim($parts[9] ?? ''))) {
+                $votesWithMatchcode++;
+            }
+
+            $checked++;
+            if ($checked >= 30) break; // Stichprobe reicht
+        }
+
+        return $votesWithoutMatchcode > $votesWithMatchcode ? 'without_matchcode' : 'with_matchcode';
+    }
+
+    /**
+     * Prüft ob ein Wert plausibel eine Mengeneinheit sein könnte
+     * (bekannter Einheiten-Code, oder kurzes reines Buchstabenkürzel).
+     * Verhindert, dass z.B. eine verrutschte Preis-Spalte als Einheit
+     * durchgeht.
+     */
+    private function isPlausibleUnit(string $unit): bool
+    {
+        $unit = strtoupper(trim($unit));
+        if ($unit === '') return false;
+
+        $known = ['ST','STK','STU','M','MTR','LFM','QM','M2','M3','KBM','L','LTR','KG','KGM','SET','PAK','PAU','ROL','BND','KAR','PCK'];
+        if (in_array($unit, $known, true)) return true;
+
+        return (bool) preg_match('/^[A-ZÄÖÜ]{1,4}$/u', $unit);
+    }
+
+    /**
+     * Prüft ob ein Wert plausibel ein Preis sein könnte (numerisch).
+     */
+    private function isPlausiblePrice(string $raw): bool
+    {
+        $cleaned = preg_replace('/[^0-9\-]/', '', $raw);
+        return $cleaned !== '' && is_numeric($cleaned);
+    }
+
     /**
      * Parst alle Zeilen und extrahiert Artikeldaten.
      *
@@ -119,6 +187,8 @@ class DatanormParserService
      */
     private function parseLines(array $lines, DatanormImport $import): array
     {
+       $this->detectedLayout = $this->detectFieldLayout($lines);
+
         $articles = [];
         $errors = [];
 
@@ -256,30 +326,39 @@ class DatanormParserService
         ];
     }
 
-    /**
-     * Parst einen B-Satz (Langtext).
+/**
+     * Parst einen B-Satz (Langtext). Nutzt dasselbe für die Datei
+     * erkannte Layout wie die A-Sätze, damit der Artikel-Key exakt
+     * übereinstimmt.
      */
-private function parseBRecord(string $line): ?array
-{
-    $parts = explode(';', $line);
-    if (count($parts) < 3 || strtoupper(trim($parts[0])) !== 'B') return null;
+    private function parseBRecord(string $line): ?array
+    {
+        $parts = explode(';', $line);
+        if (count($parts) < 3 || strtoupper(trim($parts[0])) !== 'B') return null;
 
-    $productGroup  = trim($parts[1] ?? '');
-    $articleNumber = trim($parts[2] ?? '');
-    $suffix        = trim($parts[3] ?? '');
-    $key = $productGroup . $articleNumber . $suffix;
+        $productGroup  = trim($parts[1] ?? '');
+        $articleNumber = trim($parts[2] ?? '');
 
-    $ean = trim($parts[9] ?? '');
+       $hasSuffix = (($this->detectedLayout ?? 'with_matchcode') === 'with_matchcode');
+        $suffix = $hasSuffix ? trim($parts[3] ?? '') : '';
+        if ($suffix === '00') {
+            $suffix = '';
+        }
+        $key = $productGroup . $articleNumber . $suffix;
 
-    $longTextParts = array_slice($parts, 4, 2);
-    $longText = trim(implode(' ', array_filter($longTextParts, fn($p) => trim($p) !== '')));
+        $textStart = $hasSuffix ? 4 : 3;
+        $eanIndex = $hasSuffix ? 9 : 8;
 
-    return [
-        'article_number' => $key,
-        'long_text' => $longText,
-        'ean' => $ean !== '' ? $ean : null,
-    ];
-}
+        $ean = trim($parts[$eanIndex] ?? '');
+        $longTextParts = array_slice($parts, $textStart, 2);
+        $longText = trim(implode(' ', array_filter($longTextParts, fn($p) => trim($p) !== '')));
+
+        return [
+            'article_number' => $key,
+            'long_text' => $longText,
+            'ean' => $ean !== '' ? $ean : null,
+        ];
+    }
 
     /**
      * Parst einen P-Satz (Preisdaten).
@@ -327,49 +406,78 @@ private function parseBRecord(string $line): ?array
     /**
      * Parst semikolon-getrennte Zeilen (Datanorm 5 Format).
      */
-private function parseDelimitedLine(string $line): ?array
-{
-    $parts = explode(';', $line);
-    if (count($parts) < 9) return null;
+/**
+     * Parst semikolon-getrennte A-Sätze (Datanorm 5).
+     * Nutzt das für die Datei erkannte Layout (siehe detectFieldLayout)
+     * und validiert Einheit/Preis der einzelnen Zeile zusätzlich –
+     * bei Unplausibilität wird die Zeile übersprungen statt mit
+     * falschen Werten importiert zu werden.
+     */
+   private function parseDelimitedLine(string $line): ?array
+    {
+        $parts = explode(';', $line);
+        if (count($parts) < 8) return null;
+        if (strtoupper(trim($parts[0])) !== 'A') return null;
 
-    $recordType = strtoupper(trim($parts[0]));
-    if ($recordType !== 'A') return null;
+        $productGroup = trim($parts[1] ?? '');
+        $articleNumber = trim($parts[2] ?? '');
+        if (empty($articleNumber)) return null;
 
-    // Reales Format: A;WARENGRUPPE;ARTIKELNUMMER;ERGAENZUNG;KURZTEXT1;KURZTEXT2;MENGENEINHEIT;PREISKENNZEICHEN;EINHEIT;PREIS;RABATTGRUPPE;...
-    $productGroup  = trim($parts[1] ?? '');
-    $articleNumber = trim($parts[2] ?? '');
-    $suffix        = trim($parts[3] ?? '');
-    $shortText1    = trim($parts[4] ?? '');
-    $shortText2    = trim($parts[5] ?? '');
-    $priceFlag     = trim($parts[7] ?? '0');
-    $unit          = trim($parts[8] ?? 'ST');
-    $priceRaw      = trim($parts[9] ?? '0');
-    $discountGroup = trim($parts[10] ?? '');
+        if (($this->detectedLayout ?? 'with_matchcode') === 'without_matchcode') {
+            $suffix        = '';
+            $shortText1    = trim($parts[3] ?? '');
+            $shortText2    = trim($parts[4] ?? '');
+            $unit          = trim($parts[5] ?? '');
+            $priceRaw      = trim($parts[8] ?? '0');
+            $discountGroup = trim($parts[9] ?? '');
+            // In diesem Layout ist die Bedeutung des Feldes an Preiskennzeichen-
+            // Position uneinheitlich zwischen Exporten (belegt durch identische
+            // Rohpreis-Ziffern, die je nach Datei zu unterschiedlichen Endpreisen
+            // führten). Um keine falsche Skalierung zu riskieren, wird der Preis
+            // hier immer als Stückpreis ohne Zusatz-Division behandelt.
+            $priceFlag = '0';
+        } else {
+            $suffix        = trim($parts[3] ?? '');
+            $shortText1    = trim($parts[4] ?? '');
+            $shortText2    = trim($parts[5] ?? '');
+            $unit          = trim($parts[8] ?? '');
+            $priceFlag     = trim($parts[7] ?? '0');
+            $priceRaw      = trim($parts[9] ?? '0');
+            $discountGroup = trim($parts[10] ?? '');
+        }
 
-    if (empty($articleNumber)) return null;
+        // "00" ist in Datanorm die übliche Kennzeichnung für "kein Zusatz zur
+        // Artikelnummer" – wird als leer behandelt, damit derselbe Artikel aus
+        // unterschiedlichen Datei-Layouts denselben Schlüssel erhält und beim
+        // erneuten Import aktualisiert statt dupliziert wird.
+        if ($suffix === '00') {
+            $suffix = '';
+        }
 
-    // Eindeutiger Key: Warengruppe + Artikelnummer + Ergänzung
-    $key = $productGroup . $articleNumber . $suffix;
+        if (!$this->isPlausibleUnit($unit) || !$this->isPlausiblePrice($priceRaw)) {
+            return null;
+        }
 
-    $name = $shortText1;
-    if (!empty($shortText2)) {
-        $name .= ' ' . $shortText2;
+        $name = $shortText1;
+        if (!empty($shortText2)) {
+            $name .= ' ' . $shortText2;
+        }
+        if (empty($name)) return null;
+
+        $key = $productGroup . $articleNumber . $suffix;
+
+        return [
+            'article_number' => $key,
+            'name' => $name,
+            'short_text_1' => $shortText1,
+            'short_text_2' => $shortText2,
+            'unit' => $this->convertUnit($unit),
+            'list_price' => $this->parsePrice($priceRaw, $priceFlag),
+            'discount_group' => $discountGroup,
+            'product_group' => $productGroup,
+            'match_code' => null,
+        ];
     }
-    if (empty($name)) return null;
-
-    return [
-        'article_number' => $key,
-        'name' => $name,
-        'short_text_1' => $shortText1,
-        'short_text_2' => $shortText2,
-        'unit' => $this->convertUnit($unit),
-        'list_price' => $this->parsePrice($priceRaw, $priceFlag),
-        'discount_group' => $discountGroup,
-        'product_group' => $productGroup,
-        'match_code' => null,
-    ];
-}
-
     /**
      * Konvertiert Preisstring (implizit 2 Dezimalen) in Dezimalwert.
      */
