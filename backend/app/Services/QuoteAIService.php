@@ -536,8 +536,9 @@ private function enforceMinimumPrices(array $groups): array
             return $noMatch;
         }
 
-        // Numerische Werte aus KI-Titel extrahieren (kW, mm, DN, Typ etc.)
+         // Numerische Werte aus KI-Titel extrahieren (kW, mm, DN, Typ etc.)
         $aiNumbers = $this->extractNumericValues($aiTitle);
+        $aiDims = $this->extractDimensionPairs($aiTitle);
 
         // Stoppwörter
         $stopWords = [
@@ -561,13 +562,24 @@ private function enforceMinimumPrices(array $groups): array
             $matName = strtolower($mat->name);
             $matPrice = (float) $mat->selling_price;
 
-            // Numerische Werte aus Katalog-Name extrahieren
+           // Numerische Werte aus Katalog-Name extrahieren
             $matNumbers = $this->extractNumericValues($matName);
+            $matDims = $this->extractDimensionPairs($matName);
 
             // === HARTE PRÜFUNG: Numerische Werte müssen passen ===
             // Wenn die KI "30kW" schreibt und der Katalog "10kW" hat → KEIN Match
             if (!$this->numericValuesCompatible($aiNumbers, $matNumbers)) {
                 continue;
+            }
+
+            // === HARTE PRÜFUNG: Maß-Paare müssen passen ===
+            // Wenn die KI "40/250" schreibt und der Katalog "50/350" hat → KEIN Match
+            $hasDimensionMatch = false;
+            if (!empty($aiDims) && !empty($matDims)) {
+                if (!$this->dimensionPairsMatch($aiDims, $matDims)) {
+                    continue;
+                }
+                $hasDimensionMatch = true;
             }
 
             // Schlüsselwörter aus Katalog-Name
@@ -591,8 +603,11 @@ private function enforceMinimumPrices(array $groups): array
                 }
             }
 
-            // Mindestens 2 Wörter müssen übereinstimmen
-            if ($matchingWords < 2) {
+          // Mindestens 2 Wörter müssen übereinstimmen – Ausnahme: bei exakt
+            // übereinstimmenden Maßangaben (z.B. "40/250") reicht 1 Wort,
+            // da die Maß-Übereinstimmung bereits ein starkes Signal ist.
+            $minWordsRequired = $hasDimensionMatch ? 1 : 2;
+            if ($matchingWords < $minWordsRequired) {
                 continue;
             }
 
@@ -677,6 +692,35 @@ private function enforceMinimumPrices(array $groups): array
         }
 
         return $values;
+    }
+
+     /**
+     * Extrahiert Maß-Paare wie "40/250" oder "60/300" (z.B. bei Bügeln, Kanälen, Rinnen).
+     */
+    private function extractDimensionPairs(string $text): array
+    {
+        $pairs = [];
+        if (preg_match_all('/(\d+)\s*\/\s*(\d+)/', $text, $matches, PREG_SET_ORDER)) {
+            foreach ($matches as $match) {
+                $pairs[] = [(float) $match[1], (float) $match[2]];
+            }
+        }
+        return $pairs;
+    }
+
+    /**
+     * Prüft ob zwei Maß-Paar-Listen mindestens ein exakt übereinstimmendes Paar haben.
+     */
+    private function dimensionPairsMatch(array $aiDims, array $matDims): bool
+    {
+        foreach ($aiDims as [$a1, $a2]) {
+            foreach ($matDims as [$m1, $m2]) {
+                if (abs($a1 - $m1) < 0.01 && abs($a2 - $m2) < 0.01) {
+                    return true;
+                }
+            }
+        }
+        return false;
     }
 
     /**
