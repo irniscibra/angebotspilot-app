@@ -69,23 +69,41 @@ class DatanormParserService
 
     /**
      * Konvertiert den Dateiinhalt zu UTF-8.
-     * Datanorm-Dateien sind oft in ISO-8859-1 oder CP850 (DOS) kodiert.
+     *
+     * Datanorm-Dateien älterer Exportsysteme nutzen oft CP850 (DOS-Codepage),
+     * in der deutsche Umlaute wie ü als Byte 0x81 kodiert sind. Diese Bytes
+     * liegen im Bereich 0x80-0x9F, der in echtem ISO-8859-1/Windows-1252-Text
+     * nur undefinierte Steuerzeichen enthält – taucht so ein Byte auf, ist
+     * CP850 fast immer die richtige Quellkodierung, nicht ISO-8859-1.
+     * mb_detect_encoding() erkennt das nicht zuverlässig, weil ISO-8859-1
+     * technisch jede Byte-Folge als "gültig" akzeptiert und dadurch in der
+     * Prioritätsliste fälschlich immer zuerst gewinnt.
      */
     private function convertEncoding(string $content): string
     {
-        // Versuche Encoding zu erkennen
-        $detected = mb_detect_encoding($content, ['UTF-8', 'ISO-8859-1', 'ISO-8859-15', 'Windows-1252', 'CP850'], true);
-
-        if ($detected && $detected !== 'UTF-8') {
-            $content = mb_convert_encoding($content, 'UTF-8', $detected);
+        // Bereits valides UTF-8 -> nichts zu tun
+        if (mb_check_encoding($content, 'UTF-8')) {
+            return $content;
         }
 
-        // Fallback: Wenn immer noch nicht UTF-8, force ISO-8859-1
-        if (!mb_check_encoding($content, 'UTF-8')) {
-            $content = mb_convert_encoding($content, 'UTF-8', 'ISO-8859-1');
+        // Verdächtige Bytes (0x80-0x9F) deuten stark auf CP850 hin
+        if (preg_match('/[\x80-\x9F]/', $content)) {
+            $converted = @mb_convert_encoding($content, 'UTF-8', 'CP850');
+            if ($converted !== false && mb_check_encoding($converted, 'UTF-8')) {
+                return $converted;
+            }
         }
 
-        return $content;
+        // Fallback: gängige westeuropäische Kodierungen der Reihe nach probieren
+        foreach (['ISO-8859-1', 'ISO-8859-15', 'Windows-1252'] as $encoding) {
+            $converted = @mb_convert_encoding($content, 'UTF-8', $encoding);
+            if ($converted !== false && mb_check_encoding($converted, 'UTF-8')) {
+                return $converted;
+            }
+        }
+
+        // Letzter Ausweg
+        return mb_convert_encoding($content, 'UTF-8', 'ISO-8859-1');
     }
 
     /**
