@@ -79,6 +79,10 @@ class QuoteAIService
 
             $aiResult['groups'] = $this->enforceLaborRateSanity($aiResult['groups'], (float) $company->default_hourly_rate);
 
+             // Sicherheitsnetz: vom Kunden explizit genannten Preis erzwingen
+        // (z.B. "105€/m²"), funktioniert einheitenbasiert für alle Gewerke
+            $aiResult['groups'] = $this->enforceExplicitPricing($aiResult['groups'], $description);
+
         // Positionen erstellen – mit intelligentem Katalog-Matching
             $matchLog = $this->createQuoteItems($quote, $aiResult['groups'], $allMaterials);
 
@@ -239,6 +243,17 @@ FIRMENDATEN:
 {$catalogSection}
 
 REGELN FÜR DIE KALKULATION:
+0. HÖCHSTE PRIORITÄT — VERBINDLICH, KEINE AUSNAHME: Wenn der Nutzer in der
+   Projektbeschreibung einen konkreten Preis explizit nennt (z.B. "105€/m²",
+   "65 Euro die Stunde", "Pauschalpreis 3000€"), MUSS die Summe aller Material-
+   und Arbeitspositionen dieser Leistung EXAKT diesem Preis mal Menge
+   entsprechen. Beispiel: "230m² zu 105€/m²" ergibt zwingend 24.150,00 EUR
+   Netto für diese Leistung — nicht mehr, nicht weniger. Verteile diesen
+   Gesamtbetrag realistisch auf Material- und Arbeitspositionen, aber die
+   SUMME muss exakt stimmen. Ignoriere in diesem Fall die Referenzpreise
+   unten vollständig für diese Leistung. Prüfe nach der Kalkulation selbst
+   nach, ob deine Summe exakt mit Menge × genanntem Preis übereinstimmt,
+   bevor du antwortest.
 1. Gliedere das Angebot in logische Gewerke-Gruppen (z.B. "Demontage & Entsorgung", "Sanitärinstallation", "Rohrleitungen", "Heizungsarbeiten", etc.)
 2. Trenne IMMER Material und Arbeitsleistung als separate Positionen
 3. Kalkuliere realistische Mengen und Preise für den deutschen Markt (Stand 2026) 
@@ -500,6 +515,147 @@ private function enforceMinimumPrices(array $groups): array
         }
 
         return $groups;
+    }
+
+    /**
+     * Erzwingt einen vom Kunden explizit genannten Preis (z.B. "105€/m²",
+     * "65 Euro die Stunde", "Pauschalpreis 3000€"), unabhängig vom Gewerk.
+     * Arbeitet rein über Mengeneinheiten, keine Branchen-Sonderfälle.
+     *
+     * Katalog-Positionen werden NIE skaliert – ihr Preis bleibt exakt der
+     * echte Katalogpreis. Nur die übrigen (nicht aus dem Katalog stammenden)
+     * Positionen werden proportional angepasst, damit die Gesamtsumme exakt
+     * der Kundenvorgabe entspricht.
+     */
+    private function enforceExplicitPricing(array $groups, string $description): array
+    {
+        $priceInfo = $this->extractExplicitUnitPrice($description);
+        if (!$priceInfo) {
+            return $groups;
+        }
+
+        $expectedTotal = round($priceInfo['price'] * $priceInfo['quantity'], 2);
+
+        $catalogTotal = 0.0;
+        $nonCatalogTotal = 0.0;
+
+        foreach ($groups as $group) {
+            foreach ($group['items'] as $item) {
+                $lineTotal = (float)($item['quantity'] ?? 0) * (float)($item['unit_price'] ?? 0);
+                if (!empty($item['from_catalog'])) {
+                    $catalogTotal += $lineTotal;
+                } else {
+                    $nonCatalogTotal += $lineTotal;
+                }
+            }
+        }
+
+        // Zielbetrag für die nicht-katalogierten Positionen = Kundenvorgabe
+        // abzüglich dessen, was bereits durch echte Katalogpreise gedeckt ist.
+        $targetForNonCatalog = round($expectedTotal - $catalogTotal, 2);
+
+        if ($targetForNonCatalog <= 0 || $nonCatalogTotal <= 0) {
+            // Katalog deckt schon alles ab, oder ungültiger Zustand -> nicht antasten
+            return $groups;
+        }
+
+        $diff = abs($nonCatalogTotal - $targetForNonCatalog) / $targetForNonCatalog;
+        if ($diff < 0.005) {
+            return $groups; // bereits korrekt genug (Rundungstoleranz)
+        }
+
+        $scaleFactor = $targetForNonCatalog / $nonCatalogTotal;
+
+        foreach ($groups as &$group) {
+            foreach ($group['items'] as &$item) {
+                if (!empty($item['from_catalog'])) continue;
+                $item['unit_price'] = round(((float)($item['unit_price'] ?? 0)) * $scaleFactor, 2);
+                $item['price_auto_corrected'] = true;
+            }
+        }
+        unset($group, $item);
+
+        Log::info('Explizite Kundenpreis-Vorgabe erzwungen', [
+            'unit' => $priceInfo['unit'],
+            'unit_price' => $priceInfo['price'],
+            'quantity' => $priceInfo['quantity'],
+            'expected_total' => $expectedTotal,
+            'catalog_total' => $catalogTotal,
+            'ai_non_catalog_total_before' => $nonCatalogTotal,
+            'scale_factor' => $scaleFactor,
+        ]);
+
+        return $groups;
+    }
+
+    /**
+     * Sucht in der Projektbeschreibung nach einem explizit genannten
+     * Preis pro Mengeneinheit (z.B. "105€/m²", "65 Euro die Stunde",
+     * "Pauschalpreis 3000€") sowie der dazugehörigen Menge.
+     * Rein einheitenbasiert, funktioniert branchenübergreifend.
+     */
+    private function extractExplicitUnitPrice(string $description): ?array
+    {
+        $text = mb_strtolower($description);
+
+        $unitPatterns = [
+            'm²' => 'm²|qm|m2|quadratmeter',
+            'Std' => 'std\.?|stunde|stunden',
+            'Stück' => 'stück|stk\.?|stueck',
+            'm³' => 'm³|m3|kubikmeter|cbm',
+            'kg' => 'kg|kilogramm',
+            'Liter' => 'liter',
+        ];
+
+        $unitPrice = null;
+        $priceUnit = null;
+
+        // Pauschalpreis separat behandeln (Menge = 1)
+        if (preg_match('/pauschal(?:preis)?\s*(?:von|:)?\s*(\d+(?:[.,]\d+)?)\s*(?:€|eur|euro)?/u', $text, $m)
+            || preg_match('/(\d+(?:[.,]\d+)?)\s*(?:€|eur|euro)\s*pauschal/u', $text, $m)) {
+            return [
+                'unit' => 'pauschal',
+                'price' => (float) str_replace(',', '.', $m[1]),
+                'quantity' => 1.0,
+            ];
+        }
+
+        // Muster: "105€/m²", "105 € pro qm", "65 Euro die Stunde"
+        foreach ($unitPatterns as $normUnit => $alt) {
+            if (preg_match('/(\d+(?:[.,]\d+)?)\s*(?:€|eur|euro)?\s*(?:\/|pro|je|die|der)\s*(?:' . $alt . ')/u', $text, $m)) {
+                $unitPrice = (float) str_replace(',', '.', $m[1]);
+                $priceUnit = $normUnit;
+                break;
+            }
+        }
+
+        // Muster: "qm preis von 105" (Einheit vor dem Preis)
+        if ($unitPrice === null) {
+            foreach ($unitPatterns as $normUnit => $alt) {
+                if (preg_match('/(?:' . $alt . ')\s*preis\s*(?:von|:)?\s*(\d+(?:[.,]\d+)?)/u', $text, $m)) {
+                    $unitPrice = (float) str_replace(',', '.', $m[1]);
+                    $priceUnit = $normUnit;
+                    break;
+                }
+            }
+        }
+
+        if ($unitPrice === null || $priceUnit === null || $unitPrice <= 0) {
+            return null;
+        }
+
+        // Menge derselben Einheit im Text finden
+        $alt = $unitPatterns[$priceUnit];
+        if (!preg_match('/(\d+(?:[.,]\d+)?)\s*(?:' . $alt . ')/u', $text, $qm)) {
+            return null;
+        }
+        $quantity = (float) str_replace(',', '.', $qm[1]);
+
+        if ($quantity <= 0) {
+            return null;
+        }
+
+        return ['unit' => $priceUnit, 'price' => $unitPrice, 'quantity' => $quantity];
     }
 
     /**
