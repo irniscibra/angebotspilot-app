@@ -88,11 +88,18 @@
                     </q-item-section>
                     <q-item-section>KI-Preisanalyse</q-item-section>
                   </q-item>
-                  <q-item clickable @click="onShareLink">
+                                    <q-item clickable @click="onShareLink">
                     <q-item-section avatar>
                       <q-icon name="link" color="green" />
                     </q-item-section>
                     <q-item-section>Online-Link teilen</q-item-section>
+                  </q-item>
+                  <q-separator />
+                  <q-item clickable @click="showFeedbackDialog = true">
+                    <q-item-section avatar>
+                      <q-icon name="feedback" color="grey-7" />
+                    </q-item-section>
+                    <q-item-section>Feedback zu diesem Angebot</q-item-section>
                   </q-item>
                 </q-list>
               </q-menu>
@@ -700,7 +707,7 @@
                   >
                 </div>
                 <q-separator class="q-my-sm" />
-                <div class="row justify-between items-center">
+                           <div class="row justify-between items-center">
                   <span
                     style="font-weight: 700; font-size: 16px; color: #0f172a"
                     >Gesamt</span
@@ -710,7 +717,34 @@
                     >{{ formatPrice(quote.total_gross) }} €</span
                   >
                 </div>
+                </div>
+            </q-card-section>
+          </q-card>
+
+          <q-card
+            flat
+            clickable
+            class="q-mt-md"
+            style="
+              border: 1px solid #fde68a;
+              border-radius: 12px;
+              background: #fffbeb;
+              cursor: pointer;
+              transition: box-shadow 0.15s;
+            "
+            @click="showFeedbackDialog = true"
+          >
+            <q-card-section class="row items-center q-py-md">
+              <q-icon name="flag" color="amber-8" size="22px" class="q-mr-sm" />
+              <div class="col">
+                <div style="font-size: 13px; font-weight: 700; color: #92400e;">
+                  Preis stimmt nicht?
+                </div>
+                <div style="font-size: 15.5px; color: #b45309;">
+                  Kurz Bescheid geben – wir schauen es uns sofort an
+                </div>
               </div>
+              <q-icon name="chevron_right" color="amber-6" size="18px" />
             </q-card-section>
           </q-card>
           <q-card
@@ -1232,6 +1266,7 @@
       "
     />
     <PriceCheckDialog v-model="showPriceCheck" :quote="quote" />
+    <FeedbackDialog v-model="showFeedbackDialog" :quote-id="quote?.id" />
   </q-page>
 </template>
 
@@ -1243,15 +1278,17 @@ import { useQuasar } from "quasar";
 import { api } from "src/boot/axios";
 import SendQuoteDialog from "src/components/SendQuoteDialog.vue";
 import PriceCheckDialog from "src/components/PriceCheckDialog.vue";
+import FeedbackDialog from "src/components/FeedbackDialog.vue";
 export default {
   name: "QuoteDetailPage",
-  components: { SendQuoteDialog, PriceCheckDialog },
+  components: { SendQuoteDialog, PriceCheckDialog, FeedbackDialog },
   setup() {
     const route = useRoute();
     const router = useRouter();
     const quoteStore = useQuoteStore();
     const $q = useQuasar();
     const showSendDialog = ref(false);
+    const showFeedbackDialog = ref(false);
     // State
     const loading = ref(true);
     const quote = ref(null);
@@ -1697,6 +1734,7 @@ export default {
       onApplyTemplate,
       onSaveAsTemplate,
       showSendDialog,
+      showFeedbackDialog,
       showPriceCheck,
       onShareLink,
     };

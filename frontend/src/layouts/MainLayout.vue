@@ -1,115 +1,83 @@
 <template>
   <q-layout view="lHh Lpr lff">
-    <!-- NEU: Mobile Header mit Hamburger -->
-    <!-- Mobile Header: nur Logo, kein Hamburger mehr (Navigation läuft über Bottom-Nav) -->
+    <!-- Mobile Header: nur Logo, Navigation läuft über Bottom-Nav -->
     <q-header
       elevated
-      class="bg-white text-dark"
-      style="border-bottom: 1px solid #e2e8f0"
+      class="ap-mobile-header"
       v-if="$q.screen.lt.lg"
     >
-      <q-toolbar
-        style="position: relative; min-height: 58px; justify-content: center"
-      >
+      <q-toolbar style="min-height: 58px; justify-content: center">
         <img
           src="~assets/angebotspilot-logo.png"
           alt="AngebotsPilot"
-          style="height: 46px; width: auto"
+          style="height: 42px; width: auto"
         />
       </q-toolbar>
     </q-header>
+
     <q-drawer
       v-if="!$q.screen.lt.lg"
       v-model="leftDrawerOpen"
       show-if-above
-      bordered
-      :width="220"
-      style="background: #ffffff; border-right: 1px solid #e2e8f0"
+      :width="240"
+      class="ap-drawer"
     >
-      <div
-        style="
-          padding: 16px 8px;
-          border-bottom: 1px solid #e2e8f0;
-          display: flex;
-          align-items: center;
-          gap: 10px;
-        "
-      >
-        <div>
+      <div class="ap-drawer-inner">
+        <!-- Logo -->
+        <div class="ap-logo-area">
           <img
             src="~assets/angebotspilot-logo.png"
             alt="AngebotsPilot"
-            style="height: 78px; width: auto"
+            style="height: 60px; width: auto"
           />
         </div>
-      </div>
-      <q-list padding style="padding: 8px 6px">
-        <q-item
-          v-for="item in menuItems"
-          :key="item.to"
-          :to="item.to"
-          clickable
-          :active="
-            $route.path === item.to ||
-            ($route.path.startsWith(item.to + '/') &&
-              item.to !== '/quotes/create')
-          "
-          active-class="menu-active"
-          style="border-radius: 8px; margin-bottom: 2px; min-height: 40px"
-        >
-          <q-item-section avatar style="min-width: 36px">
-            <q-icon
-              :name="item.icon"
-              :color="isActive(item.to) ? 'primary' : 'grey-6'"
-              size="20px"
-            />
-          </q-item-section>
-          <q-item-section>
-            <q-item-label
-              :style="`font-size: 13px; font-weight: ${isActive(item.to) ? '600' : '400'}; color: ${isActive(item.to) ? '#1d4ed8' : '#4b5563'};`"
-            >
-              {{ item.label }}
-            </q-item-label>
-          </q-item-section>
-        </q-item>
-      </q-list>
-      <q-space />
-      <div
-        style="
-          padding: 12px 14px;
-          border-top: 1px solid #e2e8f0;
-          display: flex;
-          align-items: center;
-          gap: 10px;
-        "
-      >
-        <q-avatar
-          size="32px"
-          color="primary"
-          text-color="white"
-          style="font-weight: 700; font-size: 12px"
-          >{{ userInitials }}</q-avatar
-        >
-        <div class="col">
-          <div style="font-size: 12px; font-weight: 600; color: #0f172a">
-            {{ authStore.userName }}
-          </div>
-          <div style="font-size: 10px; color: #94a3b8">
-            {{ authStore.company?.name }}
-          </div>
+
+        <!-- Navigation -->
+        <q-list class="ap-nav-list">
+          <router-link
+            v-for="item in menuItems"
+            :key="item.to"
+            :to="item.to"
+            class="ap-nav-item"
+            :class="{ 'is-active': isActive(item.to) }"
+          >
+            <q-icon :name="item.icon" size="19px" class="ap-nav-icon" />
+            <span class="ap-nav-label">{{ item.label }}</span>
+          </router-link>
+        </q-list>
+
+        <q-space />
+
+        <!-- Feedback -->
+        <div class="ap-footer-block">
+          <button class="ap-feedback-row" @click="showFeedbackDialog = true">
+            <q-icon name="chat_bubble_outline" size="17px" />
+            <span>Feedback geben</span>
+          </button>
         </div>
-        <q-btn
-          flat
-          round
-          dense
-          icon="logout"
-          color="grey-5"
-          size="sm"
-          @click="onLogout"
-          ><q-tooltip>Abmelden</q-tooltip></q-btn
-        >
+
+        <!-- User -->
+        <div class="ap-user-row">
+          <div class="ap-user-avatar">{{ userInitials }}</div>
+          <div class="ap-user-info">
+            <div class="ap-user-name">{{ authStore.userName }}</div>
+            <div class="ap-user-company">{{ authStore.company?.name }}</div>
+          </div>
+          <q-btn
+            flat
+            round
+            dense
+            icon="logout"
+            size="sm"
+            class="ap-logout-btn"
+            @click="onLogout"
+          >
+            <q-tooltip>Abmelden</q-tooltip>
+          </q-btn>
+        </div>
       </div>
     </q-drawer>
+
     <!-- Trial Banner -->
     <div
       v-if="
@@ -117,58 +85,60 @@
         authStore.trialDaysLeft <= 5 &&
         authStore.trialDaysLeft > 0
       "
-      :style="`background: ${authStore.trialDaysLeft <= 1 ? '#fef2f2' : authStore.trialDaysLeft <= 3 ? '#fffbeb' : '#eff6ff'}; border-bottom: 1px solid ${authStore.trialDaysLeft <= 1 ? '#fca5a5' : authStore.trialDaysLeft <= 3 ? '#fcd34d' : '#bfdbfe'}; padding: 10px 20px; display: flex; align-items: center; justify-content: space-between; font-size: 14px;`"
+      class="ap-trial-banner"
+      :class="{
+        'is-urgent': authStore.trialDaysLeft <= 1,
+        'is-warning': authStore.trialDaysLeft > 1 && authStore.trialDaysLeft <= 3,
+      }"
     >
-      <span
-        :style="`color: ${authStore.trialDaysLeft <= 1 ? '#dc2626' : authStore.trialDaysLeft <= 3 ? '#92400e' : '#1e40af'}; font-weight: 600;`"
-      >
-        ⏳ Noch {{ authStore.trialDaysLeft }}
+      <span class="ap-trial-text">
+        <q-icon name="schedule" size="15px" class="q-mr-xs" />
+        Noch {{ authStore.trialDaysLeft }}
         {{ authStore.trialDaysLeft === 1 ? "Tag" : "Tage" }} im kostenlosen Test
       </span>
-      <router-link
-        to="/upgrade"
-        :style="`background: ${authStore.trialDaysLeft <= 3 ? '#dc2626' : '#1d4ed8'}; color: white; padding: 6px 16px; border-radius: 6px; text-decoration: none; font-size: 13px; font-weight: 600;`"
-      >
+      <router-link to="/upgrade" class="ap-trial-cta">
         Jetzt upgraden →
       </router-link>
     </div>
 
     <q-page-container
-      style="background: #f6f9fc"
+      class="ap-page-container"
       :style="$q.screen.lt.lg ? 'padding-bottom: 74px' : ''"
     >
       <router-view />
     </q-page-container>
 
     <MobileBottomNav v-if="$q.screen.lt.lg" />
+
+    <FeedbackDialog v-model="showFeedbackDialog" />
   </q-layout>
 </template>
-<style>
-.menu-active {
-  background: #eff6ff !important;
-}
-</style>
+
 <script>
 import { ref, computed } from "vue";
 import { useAuthStore } from "src/stores/auth";
 import { useRouter, useRoute } from "vue-router";
 import MobileBottomNav from "components/MobileBottomNav.vue";
+import FeedbackDialog from "components/FeedbackDialog.vue";
+
 export default {
   name: "MainLayout",
   components: {
     MobileBottomNav,
+    FeedbackDialog,
   },
   setup() {
     const authStore = useAuthStore();
     const router = useRouter();
     const route = useRoute();
     const leftDrawerOpen = ref(true);
+    const showFeedbackDialog = ref(false);
+
     const menuItems = [
       { label: "Dashboard", icon: "dashboard", to: "/dashboard" },
       { label: "Neues Angebot", icon: "add_circle", to: "/quotes/create" },
       { label: "Angebote", icon: "description", to: "/quotes" },
       { label: "Rechnungen", icon: "receipt_long", to: "/invoices" },
-      // { label: 'Mahnwesen', icon: 'warning', to: '/mahnwesen' },
       { label: "Protokolle", icon: "assignment_turned_in", to: "/protokolle" },
       { label: "Kunden", icon: "people", to: "/customers" },
       { label: "Materialkatalog", icon: "inventory_2", to: "/materials" },
@@ -176,11 +146,13 @@ export default {
       { label: "Datanorm Import", icon: "upload_file", to: "/datanorm" },
       { label: "Einstellungen", icon: "settings", to: "/settings" },
     ];
+
     const isActive = (to) =>
       route.path === to ||
       (route.path.startsWith(to + "/") &&
         to !== "/quotes/create" &&
         to !== "/dashboard");
+
     const userInitials = computed(() => {
       const n = authStore.userName || "";
       return n
@@ -190,10 +162,12 @@ export default {
         .toUpperCase()
         .slice(0, 2);
     });
+
     const onLogout = async () => {
       await authStore.logout();
       router.push("/auth/login");
     };
+
     return {
       authStore,
       leftDrawerOpen,
@@ -201,7 +175,182 @@ export default {
       userInitials,
       onLogout,
       isActive,
+      showFeedbackDialog,
     };
   },
 };
 </script>
+
+<style scoped>
+.ap-mobile-header {
+  background: #ffffff;
+  color: #12121f;
+  border-bottom: 1px solid #eceef4;
+  box-shadow: none;
+}
+
+.ap-drawer {
+  background: #ffffff;
+  border-right: 1px solid #eceef4 !important;
+}
+.ap-drawer-inner {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  padding: 18px 14px 16px;
+}
+
+.ap-logo-area {
+  padding: 4px 8px 20px;
+}
+
+.ap-nav-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 0;
+}
+.ap-nav-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 9px 12px;
+  border-radius: 10px;
+  color: #64748b;
+  text-decoration: none;
+  font-size: 13.5px;
+  font-weight: 500;
+  transition: background 0.15s, color 0.15s;
+}
+.ap-nav-item:hover {
+  background: #f4f5fa;
+  color: #12121f;
+}
+.ap-nav-item.is-active {
+  background: #eef0ff;
+  color: #4f46e5;
+  font-weight: 600;
+}
+.ap-nav-icon {
+  flex-shrink: 0;
+}
+.ap-nav-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ap-footer-block {
+  padding-top: 8px;
+  margin-top: 8px;
+  border-top: 1px solid #eceef4;
+}
+.ap-feedback-row {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 12px;
+  border-radius: 10px;
+  border: none;
+  background: transparent;
+  color: #8b90a3;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+.ap-feedback-row:hover {
+  background: #f4f5fa;
+  color: #4f46e5;
+}
+
+.ap-user-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 8px 4px;
+  margin-top: 4px;
+}
+.ap-user-avatar {
+  width: 34px;
+  height: 34px;
+  border-radius: 10px;
+  background: linear-gradient(135deg, #4f46e5, #6366f1);
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  font-weight: 700;
+  flex-shrink: 0;
+}
+.ap-user-info {
+  flex: 1;
+  min-width: 0;
+}
+.ap-user-name {
+  font-size: 12.5px;
+  font-weight: 600;
+  color: #12121f;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.ap-user-company {
+  font-size: 11px;
+  color: #a1a6b8;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.ap-logout-btn {
+  color: #c6cad9;
+  flex-shrink: 0;
+}
+
+.ap-trial-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 20px;
+  font-size: 13.5px;
+  background: #eef0ff;
+  border-bottom: 1px solid #d9ddfb;
+}
+.ap-trial-banner.is-warning {
+  background: #fef3e2;
+  border-bottom-color: #fbdca3;
+}
+.ap-trial-banner.is-urgent {
+  background: #fdecec;
+  border-bottom-color: #f5b8b8;
+}
+.ap-trial-text {
+  color: #4338ca;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+}
+.is-warning .ap-trial-text { color: #92400e; }
+.is-urgent .ap-trial-text { color: #b91c1c; }
+
+.ap-trial-cta {
+  background: #4f46e5;
+  color: #fff;
+  padding: 6px 16px;
+  border-radius: 8px;
+  text-decoration: none;
+  font-size: 12.5px;
+  font-weight: 600;
+  flex-shrink: 0;
+  transition: opacity 0.15s;
+}
+.ap-trial-cta:hover { opacity: 0.9; }
+.is-urgent .ap-trial-cta { background: #dc2626; }
+
+.ap-page-container {
+  background: #f7f8fb;
+}
+</style>
