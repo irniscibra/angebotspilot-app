@@ -48,6 +48,7 @@ class Company extends Model
         'bank_account_holder',
         'is_small_business',
         'plan',
+        'feedback_widget_enabled',
         'trial_ends_at',
         'subscription_started_at',
         'cancelled_at',
@@ -60,6 +61,7 @@ class Company extends Model
         'default_hourly_rate' => 'decimal:2',
         'trial_ends_at' => 'datetime',
         'is_small_business'    => 'boolean',
+        'feedback_widget_enabled' => 'boolean',
         'mahnung_fee_level1'   => 'decimal:2',
         'mahnung_fee_level2'   => 'decimal:2',
         'mahnung_fee_level3'   => 'decimal:2',
@@ -132,6 +134,11 @@ class Company extends Model
     public function mahnungen()
     {
         return $this->hasMany(\App\Models\Mahnung::class);
+    }
+
+    public function feedback()
+    {
+        return $this->hasMany(Feedback::class);
     }
 
     // ---- Business Logic ----

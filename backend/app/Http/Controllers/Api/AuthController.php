@@ -9,6 +9,9 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Validation\Rules;
+use App\Mail\NewRegistrationNotification;
+use Illuminate\Support\Facades\Mail;
+
 
 class AuthController extends Controller
 {
@@ -44,6 +47,10 @@ class AuthController extends Controller
 
         // Verifikations-E-Mail senden
         $user->sendEmailVerificationNotification();
+
+            // Admin-Benachrichtigung bei neuer Registrierung
+        Mail::to('info@angebotspilot.app')
+            ->send(new NewRegistrationNotification($user, $company));
 
         return response()->json([
             'message'             => 'Registrierung erfolgreich. Bitte bestätigen Sie Ihre E-Mail-Adresse.',

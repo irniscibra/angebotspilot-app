@@ -17,7 +17,7 @@ use App\Http\Controllers\Api\PublicQuoteController;
 use App\Http\Controllers\Api\DatevExportController;
 use App\Http\Controllers\Api\EmailVerificationController;
 use App\Http\Controllers\Api\MahnungController;
-
+use App\Http\Controllers\Api\FeedbackController;
 /*
 |--------------------------------------------------------------------------
 | API Routes – AngebotsPilot
@@ -87,6 +87,9 @@ Route::get('/email-verify/{id}/{hash}', [EmailVerificationController::class, 've
     Route::put('company', [CompanyController::class, 'update']);
     Route::post('company/logo', [CompanyController::class, 'uploadLogo']);
     Route::delete('company/logo', [CompanyController::class, 'removeLogo']);
+
+       // Feedback
+    Route::post('feedback', [FeedbackController::class, 'store']);
 
 // Materialsuche (Autocomplete)
     Route::get('/materials/search', [MaterialController::class, 'search']);
