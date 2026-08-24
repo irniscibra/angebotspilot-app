@@ -79,9 +79,19 @@ class QuoteAIService
 
             $aiResult['groups'] = $this->enforceLaborRateSanity($aiResult['groups'], (float) $company->default_hourly_rate);
 
-             // Sicherheitsnetz: vom Kunden explizit genannten Preis erzwingen
+                  // Sicherheitsnetz: vom Kunden explizit genannten Preis erzwingen
         // (z.B. "105€/m²"), funktioniert einheitenbasiert für alle Gewerke
             $aiResult['groups'] = $this->enforceExplicitPricing($aiResult['groups'], $description);
+
+                // Sicherheitsnetz: verdächtige Pauschal-Materialien markieren
+        // (rein additiv, ändert keine Preise/Mengen/Katalog-Zuordnung)
+            $aiResult['groups'] = $this->flagVaguePauschalMaterials($aiResult['groups']);
+
+        // Sicherheitsnetz: unrealistisch teure Nebenmaterial-Positionen markieren
+        // (rein additiv, ändert keine Preise/Mengen/Katalog-Zuordnung)
+            $aiResult['groups'] = $this->flagOverpricedMinorMaterials($aiResult['groups']);
+
+      
 
         // Positionen erstellen – mit intelligentem Katalog-Matching
             $matchLog = $this->createQuoteItems($quote, $aiResult['groups'], $allMaterials);
@@ -416,6 +426,18 @@ PROMPT;
                     'catalog_name' => $matchedMaterial?->name,
                     'catalog_price' => $matchedMaterial ? $unitPrice : null,
                 ];
+                $description = $item['description'] ?? null;
+                if (!empty($item['price_suspicious']) && !$matchedMaterial) {
+                    $description = trim(
+                        ($description ? $description . ' ' : '') .
+                        '🔴 ACHTUNG: Preis wirkt unrealistisch hoch für diese Position – unbedingt vor Versand prüfen!'
+                    );
+                } elseif (!empty($item['needs_quantity_review']) && !$matchedMaterial) {
+                    $description = trim(
+                        ($description ? $description . ' ' : '') .
+                        '⚠ Pauschalpreis – bitte prüfen, ob alle Materialien realistisch mit eingerechnet sind.'
+                    );
+                }
 
                 QuoteItem::create([
                     'quote_id' => $quote->id,
@@ -423,7 +445,7 @@ PROMPT;
                     'group_name' => $group['name'],
                     'type' => $item['type'] ?? 'material',
                     'title' => $matchedMaterial ? $matchedMaterial->name : $item['title'],
-                    'description' => $item['description'] ?? null,
+                    'description' => $description,
                     'quantity' => $item['quantity'] ?? 1,
                     'unit' => $matchedMaterial ? $matchedMaterial->unit : ($item['unit'] ?? 'Stück'),
                     'unit_price' => $unitPrice,
@@ -606,6 +628,146 @@ private function enforceMinimumPrices(array $groups): array
             'ai_non_catalog_total_before' => $nonCatalogTotal,
             'scale_factor' => $scaleFactor,
         ]);
+
+        return $groups;
+    }
+
+        /**
+     * Markiert verdächtige Pauschal-Materialpositionen zur manuellen Prüfung.
+     * Rein additiv: ändert NIEMALS Preis, Menge, Typ oder Katalog-Zuordnung –
+     * hängt nur einen Hinweis an die Beschreibung. Kann daher nichts an der
+     * bestehenden Preis-/Katalog-Logik kaputt machen. Funktioniert gewerks-
+     * übergreifend, da rein strukturell (unit=pauschal bei Material) statt
+     * über Gewerk-spezifische Schlüsselwörter erkannt wird.
+     */
+    private function flagVaguePauschalMaterials(array $groups): array
+    {
+        // Diese Begriffe kennzeichnen legitime, bewusst pauschale Kleinteile –
+        // dafür ist "pauschal" korrekt und wird NICHT markiert.
+        $allowedSmallParts = [
+            'kleinmaterial', 'kleinteile', 'verbrauchsmaterial',
+            'sonstiges material', 'befestigungsmaterial',
+        ];
+
+        foreach ($groups as &$group) {
+            foreach ($group['items'] as &$item) {
+                if (($item['type'] ?? '') !== 'material') {
+                    continue;
+                }
+
+                $unit = strtolower(trim($item['unit'] ?? ''));
+                if ($unit !== 'pauschal') {
+                    continue;
+                }
+
+                $titleLower = strtolower($item['title'] ?? '');
+
+                $isAllowedSmallParts = false;
+                foreach ($allowedSmallParts as $kw) {
+                    if (str_contains($titleLower, $kw)) {
+                        $isAllowedSmallParts = true;
+                        break;
+                    }
+                }
+                if ($isAllowedSmallParts) {
+                    continue;
+                }
+
+                // Nur Hinweis anhängen - Preis/Menge/Typ bleiben unangetastet
+                $item['needs_quantity_review'] = true;
+            }
+        }
+        unset($group, $item);
+
+        return $groups;
+    }
+
+        /**
+     * Erkennt Materialpositionen, die für ihre Bezeichnung unrealistisch teuer
+     * sind – typischerweise wenn die KI eine Pauschale grob überschätzt
+     * (z.B. "Elektromaterial pauschal: 6.000€" statt realistischer 300-800€).
+     * Arbeitet gewerksübergreifend über zwei Signale:
+     * 1. Schlüsselwörter, die auf "Kleinteile/Nebenmaterial" hindeuten, aber
+     *    einen unverhältnismäßig hohen Preis haben
+     * 2. Eine einzelne Position, die einen unplausibel hohen Anteil an der
+     *    Gesamt-Materialsumme ausmacht, ohne Katalog-Beleg
+     *
+     * Greift NIE bei Katalog-Positionen (echte, geprüfte Preise) und ändert
+     * NIEMALS den Preis selbst – markiert nur zur Prüfung, genau wie
+     * flagVaguePauschalMaterials(). Rein additiv, kein Risiko für Bestehendes.
+     */
+    private function flagOverpricedMinorMaterials(array $groups): array
+    {
+        // Begriffe, die auf tendenziell kleinteiliges/günstiges Nebenmaterial
+        // hindeuten - wenn diese trotzdem sehr hochpreisig sind, ist das
+        // verdächtig, unabhängig vom Gewerk.
+        $minorMaterialKeywords = [
+            'elektromaterial', 'kleinmaterial', 'verbrauchsmaterial',
+            'installationsmaterial', 'anschlussmaterial', 'befestigungsmaterial',
+            'montagematerial', 'zubehör', 'dichtungsmaterial',
+        ];
+
+        // Absolute Warnschwelle für solche "Nebenmaterial"-Positionen.
+        // Bewusst hoch angesetzt (1.500€), damit legitime größere Pauschalen
+        // nicht ständig fälschlich markiert werden - Ziel ist der Faktor-10-
+        // Ausreißer, nicht jede etwas großzügige Schätzung.
+        $minorMaterialMaxPrice = 1500.0;
+
+        // Gesamte Materialsumme berechnen (für die Anteils-Prüfung)
+        $totalMaterialValue = 0.0;
+        foreach ($groups as $group) {
+            foreach ($group['items'] as $item) {
+                if (($item['type'] ?? '') === 'material') {
+                    $totalMaterialValue += (float)($item['quantity'] ?? 0) * (float)($item['unit_price'] ?? 0);
+                }
+            }
+        }
+
+        foreach ($groups as &$group) {
+            foreach ($group['items'] as &$item) {
+                if (($item['type'] ?? '') !== 'material' || !empty($item['from_catalog'])) {
+                    continue;
+                }
+
+                $titleLower = strtolower($item['title'] ?? '');
+                $lineTotal = (float)($item['quantity'] ?? 0) * (float)($item['unit_price'] ?? 0);
+
+                $isMinorMaterialLabel = false;
+                foreach ($minorMaterialKeywords as $kw) {
+                    if (str_contains($titleLower, $kw)) {
+                        $isMinorMaterialLabel = true;
+                        break;
+                    }
+                }
+
+                // Signal 1: "Nebenmaterial" laut Bezeichnung, aber unrealistisch teuer
+                if ($isMinorMaterialLabel && $lineTotal > $minorMaterialMaxPrice) {
+                    $item['price_suspicious'] = true;
+                    Log::warning('Verdächtig teures "Nebenmaterial" erkannt', [
+                        'title' => $item['title'],
+                        'line_total' => $lineTotal,
+                    ]);
+                    continue;
+                }
+
+                // Signal 2: Einzelne Position dominiert die Materialsumme
+                // unverhältnismäßig (>40%), UND ist als "pauschal" ausgewiesen
+                // (also nicht durch eine belastbare Menge x Einzelpreis belegt)
+                $unit = strtolower(trim($item['unit'] ?? ''));
+                if ($unit === 'pauschal' && $totalMaterialValue > 0) {
+                    $share = $lineTotal / $totalMaterialValue;
+                    if ($share > 0.4 && $lineTotal > 1000) {
+                        $item['price_suspicious'] = true;
+                        Log::warning('Pauschal-Position dominiert Materialsumme unverhältnismäßig', [
+                            'title' => $item['title'],
+                            'line_total' => $lineTotal,
+                            'share_of_material_total' => round($share, 2),
+                        ]);
+                    }
+                }
+            }
+        }
+        unset($group, $item);
 
         return $groups;
     }
