@@ -258,7 +258,29 @@ REGELN FÜR DIE KALKULATION:
 2. Trenne IMMER Material und Arbeitsleistung als separate Positionen
 3. Kalkuliere realistische Mengen und Preise für den deutschen Markt (Stand 2026) 
 4. Verwende marktübliche Markenmaterialien (Grohe, Hansgrohe, Viega, Geberit, Buderus, Vaillant etc.)
-5. Plane eine Kleinmaterial-Pauschale ein (5-8% der Materialkosten) für Dichtungen, Schrauben, Silikon etc.
+5. Plane eine Kleinmaterial-Pauschale ein (5-8% der Materialkosten) NUR für wirklich
+   unteilbares Kleinzeug (Schrauben, Dübel, Dichtungen, Klebeband). Diese Pauschale
+   darf NIEMALS Hauptmaterialien enthalten.
+5a. PAUSCHALEN-VERBOT FÜR HAUPTMATERIALIEN: Fliesenkleber, Fugenmasse, Silikon (in
+    größerer Menge für eine Verlegung), Spachtelmasse, Grundierung, Mauersteine,
+    Estrich, Ausgleichsmasse und vergleichbare Hauptmaterialien MÜSSEN als EIGENE
+    Position mit realistischer Menge und Einheit (kg, Liter, Stück, m², pauschal
+    NUR wenn wirklich nicht anders quantifizierbar) ausgewiesen werden — NIEMALS
+    in einer "1x pauschal"-Sammelposition versteckt.
+    Beispiel FALSCH: "Fliesen und Sockelleisten, 1x pauschal, 600€"
+    Beispiel RICHTIG: getrennte Positionen für "Fliesen 24m²", "Fliesenkleber ca.
+    8 Säcke à 25kg", "Fugenmasse ca. 3 Eimer", "Sockelleisten 12 lfm", "Silikon
+    für Randfugen 4 Kartuschen" — jede mit eigener Menge/Einheit/Preis.
+5b. FEHLENDE STANDARDMATERIALIEN PRÜFEN: Bei folgenden Arbeitsschritten IMMER an
+    das dazugehörige Verbrauchsmaterial denken und als eigene Position ergänzen,
+    auch wenn der Kunde es nicht explizit erwähnt hat:
+    - Fliesenverlegung → Fliesenkleber, Fugenmasse, Silikon für Randfugen
+    - Spachtelarbeiten → Spachtelmasse (nach m² und Schichtdicke), ggf. Armierungsvlies
+    - Mauerwerksarbeiten → Mauersteine, Mauermörtel, ggf. Sturz/Stahlträger
+    - Malerarbeiten → Grundierung, Abdeckfolie/Klebeband, Farbe
+    - Bodenbeläge → Ausgleichsmasse, Grundierung, Klebstoff, Sockelleisten
+    Falls du unsicher über die genaue Menge bist: realistisch schätzen anhand der
+    genannten Fläche/des Umfangs, lieber leicht großzügig als zu knapp.
 6. Berücksichtige Anfahrt, Baustelleneinrichtung und -reinigung wenn sinnvoll
 7. Arbeitszeiten realistisch kalkulieren – lieber etwas großzügiger als zu knapp
 8. Bei Heizungsarbeiten: EnEV/GEG Normen berücksichtigen

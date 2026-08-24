@@ -28,6 +28,15 @@
           <!-- Buttons nur Icons auf Mobile, mit Label auf Desktop -->
           <div class="row items-center q-gutter-xs">
             <q-btn
+              flat
+              color="grey-7"
+              icon="visibility"
+              :label="$q.screen.gt.sm ? 'Vorschau' : ''"
+              no-caps
+              dense
+              @click="showPreviewDrawer = true"
+            />
+            <q-btn
               color="green"
               icon="send"
               :label="$q.screen.gt.sm ? 'Versenden' : ''"
@@ -88,7 +97,7 @@
                     </q-item-section>
                     <q-item-section>KI-Preisanalyse</q-item-section>
                   </q-item>
-                                    <q-item clickable @click="onShareLink">
+                  <q-item clickable @click="onShareLink">
                     <q-item-section avatar>
                       <q-icon name="link" color="green" />
                     </q-item-section>
@@ -707,7 +716,7 @@
                   >
                 </div>
                 <q-separator class="q-my-sm" />
-                           <div class="row justify-between items-center">
+                <div class="row justify-between items-center">
                   <span
                     style="font-weight: 700; font-size: 16px; color: #0f172a"
                     >Gesamt</span
@@ -717,7 +726,7 @@
                     >{{ formatPrice(quote.total_gross) }} €</span
                   >
                 </div>
-                </div>
+              </div>
             </q-card-section>
           </q-card>
 
@@ -737,10 +746,10 @@
             <q-card-section class="row items-center q-py-md">
               <q-icon name="flag" color="amber-8" size="22px" class="q-mr-sm" />
               <div class="col">
-                <div style="font-size: 13px; font-weight: 700; color: #92400e;">
+                <div style="font-size: 13px; font-weight: 700; color: #92400e">
                   Preis stimmt nicht?
                 </div>
-                <div style="font-size: 15.5px; color: #b45309;">
+                <div style="font-size: 15.5px; color: #b45309">
                   Kurz Bescheid geben – wir schauen es uns sofort an
                 </div>
               </div>
@@ -1256,6 +1265,66 @@
       </q-card>
     </q-dialog>
 
+    <q-dialog
+      v-model="showPreviewDrawer"
+      position="right"
+      full-height
+      maximized-on-mobile
+    >
+      <q-card
+        style="
+          width: 750px;
+          max-width: 95vw;
+          display: flex;
+          flex-direction: column;
+        "
+      >
+        <q-card-section
+          class="row items-center q-pb-sm"
+          style="border-bottom: 1px solid #f1f5f9; flex-shrink: 0"
+        >
+          <h6 class="q-my-none" style="font-weight: 600; color: #0f172a">
+            Angebotsvorschau
+          </h6>
+          <q-space />
+          <q-btn flat round dense icon="close" color="grey-5" v-close-popup />
+        </q-card-section>
+
+        <q-card-section style="flex: 1; padding: 0; overflow: hidden">
+          <iframe
+            v-if="showPreviewDrawer"
+            :src="previewPdfUrl"
+            style="width: 100%; height: 100%; border: none"
+          />
+        </q-card-section>
+
+        <q-card-actions
+          align="right"
+          class="q-pa-md"
+          style="border-top: 1px solid #f1f5f9; flex-shrink: 0"
+        >
+          <q-btn
+            flat
+            color="primary"
+            icon="picture_as_pdf"
+            label="PDF herunterladen"
+            no-caps
+            @click="onExportPdf"
+          />
+          <q-btn
+            color="green"
+            icon="send"
+            label="Versenden"
+            no-caps
+            @click="
+              showPreviewDrawer = false;
+              showSendDialog = true;
+            "
+          />
+        </q-card-actions>
+      </q-card>
+    </q-dialog>
+
     <SendQuoteDialog
       v-model="showSendDialog"
       :quote="quote"
@@ -1289,6 +1358,7 @@ export default {
     const $q = useQuasar();
     const showSendDialog = ref(false);
     const showFeedbackDialog = ref(false);
+    const showPreviewDrawer = ref(false);
     // State
     const loading = ref(true);
     const quote = ref(null);
@@ -1347,6 +1417,12 @@ export default {
         g[gr].push(i);
       });
       return g;
+    });
+
+    const previewPdfUrl = computed(() => {
+      if (!quote.value) return "";
+      const t = localStorage.getItem("auth_token");
+      return `/api/quotes/${quote.value.id}/pdf/preview?token=${t}`;
     });
 
     const filteredDialogCustomers = computed(() => {
@@ -1677,11 +1753,15 @@ export default {
     };
     //Link mit angebot versenden
     const onShareLink = async () => {
-  const res = await api.post(`/quotes/${quote.value.id}/generate-link`)
-  const url = res.data.url
-  await navigator.clipboard.writeText(url)
-  $q.notify({ type: 'positive', message: 'Link kopiert! ' + url, timeout: 5000 })
-}
+      const res = await api.post(`/quotes/${quote.value.id}/generate-link`);
+      const url = res.data.url;
+      await navigator.clipboard.writeText(url);
+      $q.notify({
+        type: "positive",
+        message: "Link kopiert! " + url,
+        timeout: 5000,
+      });
+    };
 
     return {
       loading,
@@ -1735,6 +1815,8 @@ export default {
       onSaveAsTemplate,
       showSendDialog,
       showFeedbackDialog,
+      showPreviewDrawer,
+      previewPdfUrl,
       showPriceCheck,
       onShareLink,
     };
