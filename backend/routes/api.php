@@ -18,6 +18,9 @@ use App\Http\Controllers\Api\DatevExportController;
 use App\Http\Controllers\Api\EmailVerificationController;
 use App\Http\Controllers\Api\MahnungController;
 use App\Http\Controllers\Api\FeedbackController;
+use App\Http\Controllers\Api\LvImportController;
+
+
 /*
 |--------------------------------------------------------------------------
 | API Routes – AngebotsPilot
@@ -61,6 +64,11 @@ Route::get('/email-verify/{id}/{hash}', [EmailVerificationController::class, 've
     Route::get('quotes/{quoteId}/scan-status', [QuoteImportController::class, 'scanStatus']);
     Route::post('quotes/scan-prepare', [QuoteImportController::class, 'scanPrepare']); //NEU 
     Route::post('quotes/{quoteId}/scan-upload', [QuoteImportController::class, 'scanUpload']); //NEU
+
+    // LV-Import (Ausschreibungen) - eigenständig, für große GAEB-Dokumente
+    Route::post('lv-import/prepare', [LvImportController::class, 'prepare']);
+    Route::post('lv-import/{quoteId}/upload', [LvImportController::class, 'upload']);
+    Route::get('lv-import/{quoteId}/status', [LvImportController::class, 'status']);
 
     // Angebote (CRUD)
     Route::apiResource('quotes', QuoteController::class);

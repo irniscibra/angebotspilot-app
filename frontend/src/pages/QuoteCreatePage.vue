@@ -228,8 +228,58 @@
               >
                 PDF importieren
               </div>
-              <div style="font-size: 12px; color: #64748b; margin-top: 4px">
+   <div style="font-size: 12px; color: #64748b; margin-top: 4px">
                 Fremdes Angebot hochladen, KI übernimmt Positionen
+              </div>
+            </q-card-section>
+          </q-card>
+
+          <q-card
+            flat
+            clickable
+            @click="createMode = 'lv'"
+            style="
+              width: 220px;
+              border-radius: 14px;
+              cursor: pointer;
+              transition: all 0.2s;
+              position: relative;
+            "
+            :style="
+              createMode === 'lv'
+                ? 'border: 2px solid #7c3aed; background: #f5f3ff;'
+                : 'border: 2px solid #e2e8f0; background: #fff;'
+            "
+          >
+            <q-badge
+              color="purple"
+              label="PRO"
+              style="
+                position: absolute;
+                top: 8px;
+                right: 8px;
+                font-size: 9px;
+                font-weight: 700;
+              "
+            />
+            <q-card-section class="text-center q-pa-lg">
+              <q-icon
+                name="gavel"
+                size="40px"
+                :color="createMode === 'lv' ? 'purple' : 'grey-5'"
+              />
+              <div
+                class="q-mt-sm"
+                style="font-size: 15px; font-weight: 700"
+                :style="
+                  createMode === 'lv' ? 'color: #7c3aed;' : 'color: #0f172a;'
+                "
+              >
+                LV importieren
+              </div>
+              <div style="font-size: 12px; color: #64748b; margin-top: 4px">
+                Ausschreibung hochladen – Positionen automatisch
+                strukturieren
               </div>
             </q-card-section>
           </q-card>
@@ -821,7 +871,7 @@
                 </q-banner>
               </div>
 
-              <q-btn
+               <q-btn
                 color="red-7"
                 icon="picture_as_pdf"
                 label="Angebot importieren"
@@ -831,6 +881,344 @@
                 :loading="importingPdf"
                 :disable="!pdfFile"
                 @click="onImportPdf"
+                style="border-radius: 10px; font-weight: 600"
+              />
+            </div>
+          </q-card-section>
+        </q-card>
+
+        <!-- LV Import Modus -->
+        <q-card
+          v-if="createMode === 'lv'"
+          flat
+          style="
+            border: 1px solid #e2e8f0;
+            border-radius: 16px;
+            background: #ffffff;
+          "
+        >
+          <q-card-section class="q-pa-lg">
+            <!-- ── LV WIRD VERARBEITET ── -->
+            <div v-if="lvProcessing" class="text-center q-py-xl">
+              <div
+                style="
+                  position: relative;
+                  display: inline-block;
+                  margin-bottom: 24px;
+                "
+              >
+                <q-circular-progress
+                  indeterminate
+                  size="90px"
+                  :thickness="0.12"
+                  color="purple-7"
+                  track-color="purple-1"
+                />
+                <q-icon
+                  name="gavel"
+                  color="purple-7"
+                  size="36px"
+                  style="
+                    position: absolute;
+                    top: 50%;
+                    left: 50%;
+                    transform: translate(-50%, -50%);
+                  "
+                />
+              </div>
+
+              <h6
+                class="q-my-none"
+                style="font-weight: 700; color: #0f172a; font-size: 18px"
+              >
+                LV wird analysiert...
+              </h6>
+              <p style="color: #64748b; margin-top: 8px; font-size: 14px">
+                {{ lvStatusMessage }}
+              </p>
+
+              <div
+                class="q-mt-lg q-mx-auto"
+                style="max-width: 380px; text-align: left"
+              >
+                <div
+                  v-for="(step, i) in lvSteps"
+                  :key="i"
+                  class="row items-center q-gutter-sm q-mb-sm"
+                  :style="i <= lvCurrentStep ? 'opacity: 1' : 'opacity: 0.3'"
+                >
+                  <q-icon
+                    :name="
+                      i < lvCurrentStep
+                        ? 'check_circle'
+                        : i === lvCurrentStep
+                          ? 'radio_button_checked'
+                          : 'radio_button_unchecked'
+                    "
+                    :color="
+                      i < lvCurrentStep
+                        ? 'positive'
+                        : i === lvCurrentStep
+                          ? 'purple-7'
+                          : 'grey-4'
+                    "
+                    size="20px"
+                  />
+                  <span style="font-size: 13px; color: #475569">{{
+                    step
+                  }}</span>
+                  <q-spinner
+                    v-if="i === lvCurrentStep"
+                    size="14px"
+                    color="purple-7"
+                    class="q-ml-xs"
+                  />
+                </div>
+              </div>
+
+              <q-linear-progress
+                :value="lvProgress"
+                color="purple-7"
+                track-color="purple-1"
+                rounded
+                class="q-mt-lg q-mx-auto"
+                style="height: 8px; max-width: 380px"
+                animation-speed="1000"
+              />
+
+              <p class="q-mt-md" style="font-size: 12px; color: #94a3b8">
+                ⏱ Große Ausschreibungen (100+ Seiten) dauern 2–5 Minuten
+              </p>
+            </div>
+
+            <!-- ── LV FERTIG ── -->
+            <div v-else-if="lvDone" class="text-center q-py-lg">
+              <div style="margin-bottom: 16px">
+                <q-icon name="check_circle" color="positive" size="72px" />
+              </div>
+              <h6
+                class="q-my-none"
+                style="font-weight: 700; color: #0f172a; font-size: 20px"
+              >
+                LV importiert! 🎉
+              </h6>
+              <p style="color: #64748b; font-size: 14px; margin-top: 8px">
+                <strong>{{ lvPositionsCount }} Positionen</strong> wurden mit
+                Mengen und Einheiten aus dem Dokument übernommen.
+              </p>
+
+              <q-banner
+                rounded
+                class="q-mt-md text-left"
+                style="
+                  background: #ede9fe;
+                  border: 1px solid #c4b5fd;
+                  border-radius: 12px;
+                "
+              >
+                <template v-slot:avatar
+                  ><q-icon name="info" color="purple-7"
+                /></template>
+                <div style="font-size: 13px; color: #5b21b6; font-weight: 600">
+                  Preise müssen noch eingetragen werden
+                </div>
+                <div
+                  style="
+                    font-size: 12px;
+                    color: #6d28d9;
+                    margin-top: 4px;
+                    line-height: 1.5;
+                  "
+                >
+                  Bei Ausschreibungen sind die Preise bewusst leer – Sie
+                  kalkulieren selbst. Alle Mengen und Einheiten wurden exakt
+                  aus dem Dokument übernommen.
+                </div>
+              </q-banner>
+
+              <q-btn
+                color="purple-7"
+                icon="edit"
+                label="Angebot jetzt bearbeiten"
+                no-caps
+                class="q-mt-lg full-width"
+                size="lg"
+                style="border-radius: 10px; font-weight: 600"
+                @click="$router.push(`/quotes/${lvQuoteId}`)"
+              />
+              <q-btn
+                flat
+                color="grey-7"
+                label="Weitere Ausschreibung importieren"
+                no-caps
+                class="q-mt-sm full-width"
+                @click="resetLv"
+              />
+            </div>
+
+            <!-- ── LV FEHLGESCHLAGEN ── -->
+            <div v-else-if="lvFailed" class="text-center q-py-lg">
+              <q-icon name="error_outline" color="negative" size="72px" />
+              <h6 class="q-my-sm" style="font-weight: 700; color: #0f172a">
+                Import fehlgeschlagen
+              </h6>
+              <p style="color: #64748b; font-size: 14px">
+                {{ lvErrorMessage }}
+              </p>
+              <q-btn
+                color="purple-7"
+                label="Nochmal versuchen"
+                no-caps
+                class="q-mt-md"
+                icon="refresh"
+                @click="resetLv"
+                style="border-radius: 10px"
+              />
+            </div>
+
+            <!-- ── UPLOAD FORMULAR ── -->
+            <div v-else>
+              <div class="row q-gutter-md q-mb-md">
+                <q-select
+                  v-model="selectedCustomer"
+                  filled
+                  dense
+                  label="Kunde (optional)"
+                  :options="customerOptions"
+                  option-value="value"
+                  option-label="label"
+                  emit-value
+                  map-options
+                  clearable
+                  class="col"
+                  use-input
+                  @filter="filterCustomers"
+                >
+                  <template v-slot:prepend
+                    ><q-icon name="person" color="grey-5"
+                  /></template>
+                </q-select>
+                <q-input
+                  v-model="address"
+                  filled
+                  dense
+                  label="Projektadresse (optional)"
+                  class="col"
+                >
+                  <template v-slot:prepend
+                    ><q-icon name="location_on" color="grey-5"
+                  /></template>
+                </q-input>
+              </div>
+
+              <div
+                class="text-center q-pa-xl"
+                style="
+                  border: 2px dashed #e2e8f0;
+                  border-radius: 12px;
+                  cursor: pointer;
+                  transition: all 0.2s;
+                "
+                :style="
+                  lvFile
+                    ? 'border-color: #7c3aed; background: #f5f3ff;'
+                    : 'background: #f8fafc;'
+                "
+                @click="$refs.lvInput.click()"
+                @dragover.prevent
+                @drop.prevent="onLvDrop"
+              >
+                <input
+                  ref="lvInput"
+                  type="file"
+                  accept=".pdf"
+                  style="display: none"
+                  @change="onLvSelect"
+                />
+                <q-icon
+                  :name="lvFile ? 'check_circle' : 'gavel'"
+                  :color="lvFile ? 'purple-7' : 'grey-4'"
+                  size="48px"
+                />
+                <div
+                  class="q-mt-sm"
+                  style="font-weight: 600; color: #0f172a; font-size: 15px"
+                >
+                  {{
+                    lvFile ? lvFile.name : "LV-PDF hier ablegen oder klicken"
+                  }}
+                </div>
+                <div style="font-size: 12px; color: #94a3b8; margin-top: 4px">
+                  {{
+                    lvFile
+                      ? `${(lvFile.size / 1024 / 1024).toFixed(1)} MB · Klicken um andere Datei zu wählen`
+                      : "Ausschreibung als PDF · Max. 50 MB · Auch sehr große Dokumente (150+ Seiten)"
+                  }}
+                </div>
+              </div>
+
+              <div v-if="lvFile" class="q-mt-md q-gutter-sm">
+                <q-banner
+                  rounded
+                  style="
+                    background: #ede9fe;
+                    border: 1px solid #c4b5fd;
+                    border-radius: 10px;
+                  "
+                >
+                  <template v-slot:avatar
+                    ><q-icon name="auto_awesome" color="purple-7"
+                  /></template>
+                  <div
+                    style="font-size: 13px; color: #5b21b6; font-weight: 600"
+                  >
+                    KI strukturiert alle Positionen automatisch
+                  </div>
+                  <div
+                    style="font-size: 12px; color: #6d28d9; margin-top: 2px"
+                  >
+                    Mengen, Einheiten und Fabrikate werden exakt aus dem
+                    Dokument übernommen. Preise bleiben bewusst leer – Sie
+                    kalkulieren selbst.
+                  </div>
+                </q-banner>
+
+                <q-banner
+                  rounded
+                  style="
+                    background: #fef3c7;
+                    border: 1px solid #fcd34d;
+                    border-radius: 10px;
+                  "
+                >
+                  <template v-slot:avatar
+                    ><q-icon name="schedule" color="amber-7"
+                  /></template>
+                  <div
+                    style="font-size: 13px; color: #92400e; font-weight: 600"
+                  >
+                    Große Dokumente brauchen etwas Zeit
+                  </div>
+                  <div
+                    style="font-size: 12px; color: #b45309; margin-top: 2px"
+                  >
+                    Bei umfangreichen Ausschreibungen (100+ Seiten) dauert die
+                    Verarbeitung 2–5 Minuten. Sie sehen den Fortschritt live
+                    auf dieser Seite.
+                  </div>
+                </q-banner>
+              </div>
+
+              <q-btn
+                color="purple-7"
+                icon="gavel"
+                label="LV importieren"
+                class="full-width q-mt-md"
+                size="lg"
+                no-caps
+                :loading="importingLv"
+                :disable="!lvFile"
+                @click="onImportLv"
                 style="border-radius: 10px; font-weight: 600"
               />
             </div>
@@ -1189,8 +1577,30 @@ export default {
       "Katalog-Matching & Preisschätzung",
       "Angebot wird fertiggestellt",
     ];
-    let scanPollInterval = null;
+        let scanPollInterval = null;
     let scanStepInterval = null;
+
+    // LV Import (Ausschreibungen) Polling State
+    const lvFile = ref(null);
+    const importingLv = ref(false);
+    const lvProcessing = ref(false);
+    const lvDone = ref(false);
+    const lvFailed = ref(false);
+    const lvQuoteId = ref(null);
+    const lvStatusMessage = ref("PDF wird hochgeladen...");
+    const lvErrorMessage = ref("");
+    const lvPositionsCount = ref(0);
+    const lvProgress = ref(0);
+    const lvCurrentStep = ref(0);
+    const lvSteps = [
+      "Ausschreibung wird erkannt",
+      "Dokument wird in Kapitel zerlegt",
+      "KI erfasst alle Positionen mit Mengen",
+      "Positionen werden strukturiert",
+      "Angebot wird fertiggestellt",
+    ];
+    let lvPollInterval = null;
+    let lvStepInterval = null;
 
     const authStore = useAuthStore();
     const trialLimitDialog = ref(false);
@@ -1229,9 +1639,11 @@ export default {
       loadTemplates();
     });
 
-    onUnmounted(() => {
+      onUnmounted(() => {
       if (scanPollInterval) clearInterval(scanPollInterval);
       if (scanStepInterval) clearInterval(scanStepInterval);
+      if (lvPollInterval) clearInterval(lvPollInterval);
+      if (lvStepInterval) clearInterval(lvStepInterval);
     });
 
     const filterCustomers = (val, update) => {
@@ -1562,7 +1974,151 @@ export default {
             message: e.response?.data?.message || "Fehler beim Import",
           });
         }
-        // Wenn upload fehlschlägt aber polling läuft → ignorieren, job läuft trotzdem
+      // Wenn upload fehlschlägt aber polling läuft → ignorieren, job läuft trotzdem
+      }
+    };
+
+    // === LV Import (Ausschreibungen) ===
+    const resetLv = () => {
+      lvProcessing.value = false;
+      lvDone.value = false;
+      lvFailed.value = false;
+      lvQuoteId.value = null;
+      lvStatusMessage.value = "PDF wird hochgeladen...";
+      lvErrorMessage.value = "";
+      lvPositionsCount.value = 0;
+      lvProgress.value = 0;
+      lvCurrentStep.value = 0;
+      lvFile.value = null;
+      if (lvPollInterval) {
+        clearInterval(lvPollInterval);
+        lvPollInterval = null;
+      }
+      if (lvStepInterval) {
+        clearInterval(lvStepInterval);
+        lvStepInterval = null;
+      }
+    };
+
+    const startLvPolling = (quoteId) => {
+      lvCurrentStep.value = 1;
+      lvProgress.value = 0.15;
+
+      const statusMessages = [
+        "Ausschreibung erkannt – Dokument wird zerlegt...",
+        "Kapitel werden einzeln analysiert...",
+        "KI erfasst Positionen mit exakten Mengen...",
+        "Positionen werden strukturiert...",
+        "Angebot wird fertiggestellt...",
+      ];
+
+      lvStepInterval = setInterval(() => {
+        if (lvCurrentStep.value < lvSteps.length - 1) {
+          lvCurrentStep.value++;
+          lvProgress.value = Math.min(
+            (lvCurrentStep.value + 1) / lvSteps.length,
+            0.9,
+          );
+          lvStatusMessage.value =
+            statusMessages[lvCurrentStep.value] ||
+            statusMessages[statusMessages.length - 1];
+        }
+      }, 20000);
+
+      lvPollInterval = setInterval(async () => {
+        try {
+          const res = await api.get(`/lv-import/${quoteId}/status`);
+          const status = res.data.status;
+
+          if (status === "done") {
+            clearInterval(lvPollInterval);
+            clearInterval(lvStepInterval);
+            lvPollInterval = null;
+            lvStepInterval = null;
+            lvProgress.value = 1;
+            lvCurrentStep.value = lvSteps.length - 1;
+
+            const quote = res.data.quote;
+            lvPositionsCount.value = quote?.items?.length || 0;
+            quoteStore.currentQuote = quote;
+
+            setTimeout(() => {
+              lvProcessing.value = false;
+              lvDone.value = true;
+            }, 600);
+          } else if (status === "failed") {
+            clearInterval(lvPollInterval);
+            clearInterval(lvStepInterval);
+            lvPollInterval = null;
+            lvStepInterval = null;
+            lvProcessing.value = false;
+            lvFailed.value = true;
+            lvErrorMessage.value =
+              res.data.message || "Unbekannter Fehler beim Verarbeiten.";
+          }
+        } catch (e) {
+          console.error("LV-Polling Fehler:", e);
+        }
+      }, 5000);
+    };
+
+    const onLvSelect = (event) => {
+      const file = event.target.files[0];
+      if (file && file.type === "application/pdf") {
+        lvFile.value = file;
+      } else {
+        $q.notify({
+          type: "warning",
+          message: "Bitte eine PDF-Datei auswählen",
+        });
+      }
+    };
+
+    const onLvDrop = (event) => {
+      const file = event.dataTransfer.files[0];
+      if (file && file.type === "application/pdf") {
+        lvFile.value = file;
+      } else {
+        $q.notify({
+          type: "warning",
+          message: "Bitte eine PDF-Datei auswählen",
+        });
+      }
+    };
+
+    const onImportLv = async () => {
+      if (!lvFile.value) return;
+      importingLv.value = true;
+
+      try {
+        const prepareRes = await api.post("/lv-import/prepare", {
+          customer_id: selectedCustomer.value || undefined,
+          project_address: address.value || undefined,
+        });
+
+        const quoteId = prepareRes.data.quote_id;
+
+        lvQuoteId.value = quoteId;
+        importingLv.value = false;
+        lvProcessing.value = true;
+        lvStatusMessage.value = "PDF wird hochgeladen...";
+        startLvPolling(quoteId);
+
+        const formData = new FormData();
+        formData.append("pdf", lvFile.value);
+
+        await api.post(`/lv-import/${quoteId}/upload`, formData, {
+          headers: { "Content-Type": "multipart/form-data" },
+          timeout: 600000, // 10 Minuten
+        });
+      } catch (e) {
+        if (!lvProcessing.value) {
+          importingLv.value = false;
+          $q.notify({
+            type: "negative",
+            message: e.response?.data?.message || "Fehler beim LV-Import",
+          });
+        }
       }
     };
 
@@ -1614,6 +2170,22 @@ export default {
       authStore,
       trialLimitDialog,
       goToUpgrade,
+      lvFile,
+      importingLv,
+      lvProcessing,
+      lvDone,
+      lvFailed,
+      lvQuoteId,
+      lvStatusMessage,
+      lvErrorMessage,
+      lvPositionsCount,
+      lvProgress,
+      lvCurrentStep,
+      lvSteps,
+      resetLv,
+      onLvSelect,
+      onLvDrop,
+      onImportLv,
     };
   },
 };
