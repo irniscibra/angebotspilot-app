@@ -78,7 +78,7 @@ class LvImportService
      * Jeder Block behält seinen vollen Hierarchie-Pfad (Titel > Bereich >
      * Abschnitt) für die spätere Gruppierung im Angebot.
      */
-    private function splitIntoSections(string $text): array
+       private function splitIntoSections(string $text): array
     {
         $lines = explode("\n", $text);
 
@@ -87,6 +87,7 @@ class LvImportService
         $currentBereich = '';
         $currentAbschnitt = '';
         $currentBuffer = [];
+        $foundAnySectionHeader = false;
 
         $flushSection = function () use (&$sections, &$currentTitel, &$currentBereich, &$currentAbschnitt, &$currentBuffer) {
             if (!empty($currentBuffer) && $currentAbschnitt) {
@@ -121,12 +122,33 @@ class LvImportService
             if (preg_match('/^\d+(?:\.\d+){2}\s+Abschnitt\s+(.+)$/u', trim($line), $m)) {
                 $flushSection();
                 $currentAbschnitt = trim($m[1]);
+                $foundAnySectionHeader = true;
                 continue;
             }
 
             $currentBuffer[] = $line;
         }
         $flushSection();
+
+        // Sicherheitsnetz: Falls das Dokument NICHT die erwarteten
+        // "Titel/Bereich/Abschnitt"-Überschriften nutzt (z.B. weil ein
+        // anderes Planungsbüro/eine andere Software das PDF erzeugt hat),
+        // würde sonst STILLSCHWEIGEND nichts extrahiert werden. Stattdessen
+        // wird das Dokument dann in gleich große Textblöcke aufgeteilt,
+        // damit trotzdem eine (weniger fein strukturierte) Extraktion
+        // stattfindet, statt komplett leer zu bleiben.
+        if (!$foundAnySectionHeader) {
+            Log::warning('LV-Import: Keine GAEB-Standardüberschriften gefunden, nutze Fallback-Chunking nach Zeichenlänge');
+            $sections = [];
+            $chunkSize = 6000;
+            $textChunks = mb_str_split($text, $chunkSize);
+            foreach ($textChunks as $i => $chunk) {
+                $sections[] = [
+                    'group_path' => 'Unstrukturiert (automatisch aufgeteilt, Teil ' . ($i + 1) . ')',
+                    'text' => $chunk,
+                ];
+            }
+        }
 
         return $sections;
     }
@@ -158,9 +180,22 @@ REGELN - UNBEDINGT EINHALTEN:
    (z.B. nur "EP ...... - Nur EP -" ohne Zahl davor), setze quantity auf
    1 und "quantity_unclear": true.
 3. LASS KEINE POSITION AUS. Auch kleine, unscheinbare Positionen zählen.
-4. TRENNE Material und Arbeit korrekt:
-   - "Stundenlöhne", "Monteurstunden", "Helferstunden" u.ä. = "labor"
-   - Physische Gegenstände/Materialien = "material"
+4. TRENNE Material und Arbeit korrekt - das ist WICHTIG und wird oft
+   falsch gemacht:
+   - "labor" = jede reine TÄTIGKEIT ohne verkauftes Produkt: Bohren,
+     Schlitzen, Anschließen, Messen, Programmieren, Einweisen,
+     Dokumentieren, Herstellen von Anschlüssen, Verlegen als reine
+     Tätigkeit. Auch wenn der GAEB-Titel wie "Bohrungen bis 30cm" oder
+     "Wandschlitz herstellen" klingt: das ist eine Arbeitsleistung,
+     KEIN Material, selbst wenn kein Stundenpreis sondern ein
+     Stückpreis dahinter steht.
+   - "material" = ein physisches Produkt, das geliefert und eingebaut
+     wird (Kabel, Schalter, Leuchte, Rohr, Dose, Schrank...).
+   - Faustregel: Wenn die Position mit einem Verb beschrieben ist
+     (herstellen, bohren, anschließen, messen, programmieren) und
+     KEIN konkretes Produkt/Fabrikat nennt, ist es "labor" -
+     unabhängig von der im Dokument verwendeten Einheit (Stück, m,
+     Pauschale sind bei Arbeit genauso üblich wie bei Material).
 5. Erkenne die Positionsnummer (z.B. "1.1.1.1", "U01", "1.5.2.1") und
    übernimm sie ins Feld "position_number".
 6. Nutze als "title" die kurze Bezeichnung, als "description" die

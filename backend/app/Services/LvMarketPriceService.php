@@ -20,16 +20,22 @@ class LvMarketPriceService
      * Jede geschätzte Position wird mit price_source = 'ai_estimated'
      * markiert - klar unterscheidbar von echten Katalogpreisen.
      */
-    public function estimate(array $positions): array
+       public function estimate(array $positions, string $tradeLabel = 'Bauleistungen'): array
     {
-        // Nur Material-Positionen ohne bisherigen Preis schätzen
+        // Material- UND Arbeits-Positionen ohne bisherigen Preis schätzen.
+        // Arbeitspositionen mit Stück-/Pauschal-Einheit (statt Std) haben
+        // keinen direkten Stundensatz-Bezug und brauchen daher ebenfalls
+        // eine Marktpreis-Schätzung, z.B. "Bohrung herstellen: 8€/Stück".
         $toEstimate = [];
         foreach ($positions as $idx => $pos) {
-            if (
-                ($pos['type'] ?? '') === 'material'
-                && ($pos['price_source'] ?? 'none') === 'none'
-                && !empty($pos['title'])
-            ) {
+            $isUnpriced = ($pos['price_source'] ?? 'none') === 'none';
+            $hasTitle = !empty($pos['title']);
+            $isMaterial = ($pos['type'] ?? '') === 'material';
+            $isLaborWithoutHourlyUnit = ($pos['type'] ?? '') === 'labor'
+                && !str_contains(mb_strtolower($pos['unit'] ?? ''), 'std')
+                && !str_contains(mb_strtolower($pos['unit'] ?? ''), 'stunde');
+
+            if ($isUnpriced && $hasTitle && ($isMaterial || $isLaborWithoutHourlyUnit)) {
                 $toEstimate[$idx] = $pos;
             }
         }
@@ -40,10 +46,10 @@ class LvMarketPriceService
 
         Log::info('LV-Marktpreisschätzung gestartet', ['count' => count($toEstimate)]);
 
-        $batches = array_chunk($toEstimate, 15, true);
+               $batches = array_chunk($toEstimate, 15, true);
 
         foreach ($batches as $batch) {
-            $estimates = $this->estimateBatch($batch);
+            $estimates = $this->estimateBatch($batch, $tradeLabel);
             foreach ($estimates as $posNumber => $price) {
                 foreach ($batch as $idx => $pos) {
                     if (($pos['position_number'] ?? '') === $posNumber) {
@@ -58,13 +64,14 @@ class LvMarketPriceService
         return $positions;
     }
 
-    private function estimateBatch(array $batch): array
+       private function estimateBatch(array $batch, string $tradeLabel): array
     {
-        $itemsText = '';
+              $itemsText = '';
         foreach ($batch as $pos) {
             $itemsText .= sprintf(
-                "- Pos %s: \"%s\" | Fabrikat: %s | Menge: %s %s\n  Beschreibung: %s\n",
+                "- Pos %s [%s]: \"%s\" | Fabrikat: %s | Menge: %s %s\n  Beschreibung: %s\n",
                 $pos['position_number'] ?? '?',
+                ($pos['type'] ?? '') === 'labor' ? 'ARBEIT' : 'MATERIAL',
                 $pos['title'] ?? '',
                 $pos['fabrikat'] ?? 'nicht angegeben',
                 $pos['quantity'] ?? '?',
@@ -73,17 +80,25 @@ class LvMarketPriceService
             );
         }
 
-        $prompt = <<<PROMPT
-Du bist Experte für Baupreise und Materialkosten in Deutschland, Stand 2026.
+            $prompt = <<<PROMPT
+Du bist Experte für Baupreise, Materialkosten UND Handwerker-Arbeitspreise
+in Deutschland, Stand 2026.
 
 Schätze für JEDE der folgenden Positionen einen realistischen NETTO-
 Einzelpreis pro Einheit für den deutschen Markt. Das sind Positionen aus
-einer Elektro-Ausschreibung mit oft konkret genanntem Fabrikat.
+einer Ausschreibung im Bereich "{$tradeLabel}".
+
+Es gibt ZWEI Arten von Positionen, jeweils unterschiedlich zu bepreisen:
+- MATERIAL: ein geliefertes Produkt (oft mit Fabrikat genannt) - Preis =
+  Fachhandel-/Großhandels-Einkaufspreis, keine Endkundenpreise mit hoher
+  Marge.
+- ARBEIT: eine reine Tätigkeit ohne Produkt (z.B. "Bohrung herstellen",
+  "Wandschlitz fräsen") - Preis = üblicher Verrechnungspreis pro Einheit
+  für diese Tätigkeit (Zeit + Aufwand + Kleinmaterial wie Verschluss-
+  masse), NICHT der Wert eines Produkts, denn es wird kein Produkt
+  verkauft.
 
 WICHTIG:
-- Preise sind Fachhandel-/Großhandelspreise, keine Endkundenpreise mit
-  hoher Marge - realistisch kalkuliert, wie ein Elektro-Großhändler sie
-  anbieten würde.
 - Wenn ein Fabrikat genannt ist, orientiere dich an dessen bekannter
   Preisklasse (z.B. Gira/Hager sind Markenqualität, nicht Billigware).
 - Bei Kabeln/Leitungen: Preis PRO METER, nicht für die Gesamtlänge.

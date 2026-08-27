@@ -64,7 +64,8 @@ class ProcessLvImportJob implements ShouldQueue
             // schätzen (Etappe 3b). Pauschal-Arbeitspositionen bleiben
             // bewusst unangetastet - deren Preis hängt zu stark vom
             // Gesamtprojekt ab, um seriös geschätzt zu werden.
-            $positions = $marketPriceService->estimate($positions);
+            $tradeLabel = \App\Services\TradeReferenceService::getLabel($company->trade ?? null);
+            $positions = $marketPriceService->estimate($positions, $tradeLabel);
 
             // Bestehende Positionen löschen (falls Job erneut läuft)
             $quote->items()->delete();
@@ -91,7 +92,9 @@ class ProcessLvImportJob implements ShouldQueue
                     $priceNote = match ($pos['price_source'] ?? '') {
                         'catalog' => '✓ Preis aus Ihrem Materialkatalog übernommen.',
                         'hourly_rate' => '✓ Ihr hinterlegter Stundensatz wurde übernommen.',
-                        'ai_estimated' => '🤖 KI-Marktschätzung – vor Angebotsabgabe unbedingt mit echten Lieferantenpreisen abgleichen!',
+                                                'ai_estimated' => (($pos['type'] ?? '') === 'labor')
+                            ? '🤖 KI-Preisschätzung für diese Arbeitsleistung – vor Angebotsabgabe unbedingt eigene Kalkulation prüfen!'
+                            : '🤖 KI-Marktschätzung – vor Angebotsabgabe unbedingt mit echten Lieferantenpreisen abgleichen!',
                         default => '',
                     };
                 } else {
