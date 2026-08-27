@@ -428,6 +428,21 @@
                               dense
                               style="font-size: 10px"
                             />
+                            <q-icon
+                              :name="
+                                item.unit_price > 0 ? 'check_circle' : 'error'
+                              "
+                              :color="
+                                item.unit_price > 0 ? 'positive' : 'orange-8'
+                              "
+                              size="16px"
+                            >
+                              <q-tooltip>{{
+                                item.unit_price > 0
+                                  ? "Preis hinterlegt"
+                                  : "Preis fehlt noch"
+                              }}</q-tooltip>
+                            </q-icon>
                           </div>
                           <div
                             v-if="item.description"
@@ -525,6 +540,21 @@
                             dense
                             style="font-size: 10px"
                           />
+                          <q-icon
+                            :name="
+                              item.unit_price > 0 ? 'check_circle' : 'error'
+                            "
+                            :color="
+                              item.unit_price > 0 ? 'positive' : 'orange-8'
+                            "
+                            size="16px"
+                          >
+                            <q-tooltip>{{
+                              item.unit_price > 0
+                                ? "Preis hinterlegt"
+                                : "Preis fehlt noch"
+                            }}</q-tooltip>
+                          </q-icon>
                         </div>
                         <div
                           v-if="item.description"
@@ -639,6 +669,28 @@
 
         <!-- Kalkulation Sidebar -->
         <div class="col-12 col-md-4">
+          <q-banner
+            v-if="unpricedCount > 0"
+            rounded
+            class="q-mb-md"
+            style="
+              background: #fff7ed;
+              border: 1px solid #fed7aa;
+              border-radius: 12px;
+            "
+          >
+            <template v-slot:avatar
+              ><q-icon name="error" color="orange-8"
+            /></template>
+            <div style="font-size: 13px; font-weight: 700; color: #9a3412">
+              {{ unpricedCount }} von {{ quote.items.length }} Positionen ohne
+              Preis
+            </div>
+            <div style="font-size: 12px; color: #c2410c; margin-top: 2px">
+              Bitte vor dem Versenden ergänzen.
+            </div>
+          </q-banner>
+
           <q-card
             flat
             style="
@@ -1419,10 +1471,17 @@ export default {
       return g;
     });
 
-    const previewPdfUrl = computed(() => {
+      const previewPdfUrl = computed(() => {
       if (!quote.value) return "";
       const t = localStorage.getItem("auth_token");
       return `/api/quotes/${quote.value.id}/pdf/preview?token=${t}`;
+    });
+
+    const unpricedCount = computed(() => {
+      if (!quote.value?.items) return 0;
+      return quote.value.items.filter(
+        (i) => !i.unit_price || Number(i.unit_price) === 0,
+      ).length;
     });
 
     const filteredDialogCustomers = computed(() => {
@@ -1815,8 +1874,9 @@ export default {
       onSaveAsTemplate,
       showSendDialog,
       showFeedbackDialog,
-      showPreviewDrawer,
+       showPreviewDrawer,
       previewPdfUrl,
+      unpricedCount,
       showPriceCheck,
       onShareLink,
     };

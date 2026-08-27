@@ -86,10 +86,13 @@ class ProcessLvImportJob implements ShouldQueue
                         'hourly_rate' => '✓ Ihr hinterlegter Stundensatz wurde übernommen.',
                         default => '',
                     };
-                } else {
-                    $priceNote = '💰 Preis noch nicht ermittelt – bitte eintragen.';
+                          } else {
+                    // Kein Preishinweis mehr im Text nötig - das reaktive
+                    // ✅/❗-Icon in der UI zeigt den Preisstatus zuverlässig
+                    // und bleibt immer aktuell, auch nach manueller Bearbeitung.
+                    $priceNote = '';
                     if (!empty($pos['quantity_unclear'])) {
-                        $priceNote .= ' ℹ Menge im Dokument nicht eindeutig angegeben – bitte prüfen.';
+                        $priceNote = 'ℹ Menge im Dokument nicht eindeutig angegeben – bitte prüfen.';
                     }
                 }
 
