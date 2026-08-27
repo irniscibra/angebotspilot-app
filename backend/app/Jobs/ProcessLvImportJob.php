@@ -6,6 +6,7 @@ use App\Models\Material;
 use App\Models\Quote;
 use App\Models\QuoteItem;
 use App\Services\LvImportService;
+use App\Services\LvMarketPriceService;
 use App\Services\LvPriceEnrichmentService;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
@@ -30,7 +31,7 @@ class ProcessLvImportJob implements ShouldQueue
         public int $userId,
     ) {}
 
-    public function handle(LvImportService $service, LvPriceEnrichmentService $priceService): void
+        public function handle(LvImportService $service, LvPriceEnrichmentService $priceService, LvMarketPriceService $marketPriceService): void
     {
         $quote = Quote::find($this->quoteId);
         if (!$quote) {
@@ -53,11 +54,17 @@ class ProcessLvImportJob implements ShouldQueue
             $companyMaterials = Material::where('company_id', $this->companyId)
                 ->where('is_active', true)
                 ->get();
-            $positions = $priceService->enrich(
+                     $positions = $priceService->enrich(
                 $positions,
                 $companyMaterials,
                 (float) ($company->default_hourly_rate ?? 65)
             );
+
+            // Für Material-Positionen ohne Katalog-Treffer: KI-Marktpreis
+            // schätzen (Etappe 3b). Pauschal-Arbeitspositionen bleiben
+            // bewusst unangetastet - deren Preis hängt zu stark vom
+            // Gesamtprojekt ab, um seriös geschätzt zu werden.
+            $positions = $marketPriceService->estimate($positions);
 
             // Bestehende Positionen löschen (falls Job erneut läuft)
             $quote->items()->delete();
@@ -80,13 +87,14 @@ class ProcessLvImportJob implements ShouldQueue
                 // gefunden wurde - bei Katalog-Match oder eigenem Stundensatz
                 // ist der Preis bereits verlässlich, kein Warnhinweis nötig.
                 $resolvedPrice = $pos['resolved_price'] ?? 0.0;
-                if ($resolvedPrice > 0) {
+                               if ($resolvedPrice > 0) {
                     $priceNote = match ($pos['price_source'] ?? '') {
                         'catalog' => '✓ Preis aus Ihrem Materialkatalog übernommen.',
                         'hourly_rate' => '✓ Ihr hinterlegter Stundensatz wurde übernommen.',
+                        'ai_estimated' => '🤖 KI-Marktschätzung – vor Angebotsabgabe unbedingt mit echten Lieferantenpreisen abgleichen!',
                         default => '',
                     };
-                          } else {
+                } else {
                     // Kein Preishinweis mehr im Text nötig - das reaktive
                     // ✅/❗-Icon in der UI zeigt den Preisstatus zuverlässig
                     // und bleibt immer aktuell, auch nach manueller Bearbeitung.

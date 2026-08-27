@@ -53,12 +53,38 @@ class LvPriceEnrichmentService
                 continue;
             }
 
+                // Wörter, die ein fundamental anderes Produkt kennzeichnen -
+            // wenn eines davon NUR in einem der beiden Titel vorkommt,
+            // wird der Match blockiert, egal wie viele andere Wörter
+            // übereinstimmen. Verhindert z.B. "Schuko-Steckdose" fälschlich
+            // gegen "Schuko-FUNKsteckdose" zu matchen.
+            $distinguishingWords = [
+                'funk', 'wlan', 'wifi', 'smart', 'digital', 'elektronisch',
+                'led', 'dimmbar', 'wetterfest', 'feuchtraum', 'wasserdicht',
+                'aufputz', 'unterputz', 'dreifach', 'zweifach', 'doppel',
+            ];
+
             $bestMatch = null;
             $bestScore = 0;
 
             foreach ($companyMaterials as $material) {
                 $matName = mb_strtolower($material->name);
                 $matWords = $this->extractKeywords($matName, $stopWords);
+
+                // Prüfen, ob ein unterscheidendes Wort NUR bei einem der
+                // beiden vorkommt - dann sofort ausschließen
+                $hasDistinguishingMismatch = false;
+                foreach ($distinguishingWords as $dw) {
+                    $inTitle = str_contains($title, $dw);
+                    $inMaterial = str_contains($matName, $dw);
+                    if ($inTitle !== $inMaterial) {
+                        $hasDistinguishingMismatch = true;
+                        break;
+                    }
+                }
+                if ($hasDistinguishingMismatch) {
+                    continue;
+                }
 
                 $overlap = 0;
                 foreach ($titleWords as $tw) {
@@ -70,9 +96,9 @@ class LvPriceEnrichmentService
                     }
                 }
 
-                // Mindestens 2 gemeinsame Wörter für einen Treffer - verhindert
-                // zufällige Matches bei kurzen, generischen Bezeichnungen
-                if ($overlap >= 2 && $overlap > $bestScore) {
+                // Mindestens 3 statt 2 gemeinsame Wörter - reduziert
+                // Zufallstreffer bei kurzen, generischen Bezeichnungen
+                if ($overlap >= 3 && $overlap > $bestScore) {
                     $bestScore = $overlap;
                     $bestMatch = $material;
                 }
