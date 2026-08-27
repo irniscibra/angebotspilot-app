@@ -52,7 +52,24 @@ class LvImportService
             $text .= $page->getText() . "\n";
         }
 
-        return $text;
+        return $this->sanitizeUtf8($text);
+    }
+
+    /**
+     * Bereinigt ungültige UTF-8-Byte-Sequenzen, die manche PDF-Parser-
+     * Versionen bei bestimmten Schriftarten/Sonderzeichen erzeugen können
+     * (z.B. bei Umlauten). Ohne diesen Schritt bricht json_encode() beim
+     * API-Aufruf mit "Malformed UTF-8 characters" ab - passiert je nach
+     * installierter Parser-Version unterschiedlich häufig.
+     */
+    private function sanitizeUtf8(string $text): string
+    {
+        if (function_exists('mb_scrub')) {
+            return mb_scrub($text, 'UTF-8');
+        }
+
+        $clean = @iconv('UTF-8', 'UTF-8//IGNORE', $text);
+        return $clean !== false ? $clean : preg_replace('/[^\x09\x0A\x0D\x20-\x7E\xC2-\xF4][\x80-\xBF]*/', '', $text);
     }
 
     /**
