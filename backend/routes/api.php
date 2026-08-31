@@ -32,6 +32,8 @@ Route::prefix('auth')->group(function () {
     Route::post('register', [AuthController::class, 'register']);
     Route::post('login', [AuthController::class, 'login']);
     Route::post('email/resend', [EmailVerificationController::class, 'resend']);
+    Route::post('forgot-password', [AuthController::class, 'forgotPassword'])->middleware('throttle:5,1');
+    Route::post('reset-password', [AuthController::class, 'resetPassword'])->middleware('throttle:10,1');
 });
 
 // E-Mail-Verifikation (muss unter /api laufen, damit Nginx sie ans Backend weiterleitet)
@@ -51,6 +53,7 @@ Route::get('/email-verify/{id}/{hash}', [EmailVerificationController::class, 've
     // Auth-Routen: KEIN Subscription-Check (immer erreichbar)
     Route::post('auth/logout', [AuthController::class, 'logout']);
     Route::get('auth/me', [AuthController::class, 'me']);
+    Route::post('auth/change-password', [AuthController::class, 'changePassword']);
      // Abo-Verwaltung: KEIN Subscription-Check (muss auch bei gesperrtem Zugriff erreichbar sein)
     Route::get('company/subscription', [CompanyController::class, 'show']);
     Route::post('company/cancel-subscription', [CompanyController::class, 'cancelSubscription']);

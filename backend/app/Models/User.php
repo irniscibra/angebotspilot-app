@@ -54,6 +54,15 @@ class User extends Authenticatable implements MustVerifyEmail
         $this->notify(new VerifyEmailNotification());
     }
 
+        /**
+     * Nutzt unsere eigene, professionell gestaltete Passwort-Reset-E-Mail
+     * statt Laravels Standard-Benachrichtigung.
+     */
+    public function sendPasswordResetNotification($token): void
+    {
+        $this->notify(new \App\Notifications\ResetPasswordNotification($token));
+    }
+
     // ---- Helpers ----
 
     public function isOwner(): bool

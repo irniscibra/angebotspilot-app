@@ -22,10 +22,20 @@ const routes = [
         name: "login",
         component: () => import("pages/LoginPage.vue"),
       },
-      {
+         {
         path: "register",
         name: "register",
         component: () => import("pages/RegisterPage.vue"),
+      },
+      {
+        path: "forgot-password",
+        name: "forgot-password",
+        component: () => import("pages/ForgotPasswordPage.vue"),
+      },
+      {
+        path: "reset-password",
+        name: "reset-password",
+        component: () => import("pages/ResetPasswordPage.vue"),
       },
     ],
   },

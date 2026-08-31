@@ -116,4 +116,96 @@ class AuthController extends Controller
             'user' => $request->user()->load('company'),
         ]);
     }
+
+        /**
+     * Schritt 1 des Passwort-Reset: E-Mail mit Reset-Link versenden.
+     */
+    public function forgotPassword(Request $request): JsonResponse
+    {
+        $request->validate([
+            'email' => 'required|email',
+        ]);
+
+        \Illuminate\Support\Facades\Password::sendResetLink(
+            $request->only('email')
+        );
+
+        // Aus Sicherheitsgründen IMMER dieselbe Erfolgsmeldung zeigen,
+        // egal ob die E-Mail existiert - verhindert, dass jemand
+        // herausfinden kann, welche E-Mail-Adressen registriert sind.
+        return response()->json([
+            'message' => 'Falls ein Konto mit dieser E-Mail existiert, wurde ein Link zum Zurücksetzen des Passworts gesendet.',
+        ]);
+    }
+
+    /**
+     * Schritt 2 des Passwort-Reset: Neues Passwort mit Token setzen.
+     */
+    public function resetPassword(Request $request): JsonResponse
+    {
+        $request->validate([
+            'token' => 'required',
+            'email' => 'required|email',
+            'password' => ['required', 'confirmed', Rules\Password::defaults()],
+        ]);
+
+              $status = \Illuminate\Support\Facades\Password::reset(
+            $request->only('email', 'password', 'password_confirmation', 'token'),
+            function (User $user, string $password) {
+                $user->forceFill([
+                    'password' => Hash::make($password),
+                ])->save();
+
+                // Sicherheit: alle bestehenden Login-Sitzungen beenden,
+                // nachdem das Passwort zurückgesetzt wurde.
+                $user->tokens()->delete();
+
+                // Sicherheits-Benachrichtigung: informiert den echten
+                // Kontoinhaber, falls er die Änderung nicht selbst
+                // vorgenommen hat.
+                $user->notify(new \App\Notifications\PasswordChangedNotification());
+            }
+        );
+
+        if ($status === \Illuminate\Support\Facades\Password::PASSWORD_RESET) {
+            return response()->json([
+                'message' => 'Passwort erfolgreich zurückgesetzt. Sie können sich jetzt anmelden.',
+            ]);
+        }
+
+        return response()->json([
+            'message' => $status === \Illuminate\Support\Facades\Password::INVALID_TOKEN
+                ? 'Dieser Link ist ungültig oder abgelaufen. Bitte fordern Sie einen neuen an.'
+                : 'Passwort konnte nicht zurückgesetzt werden.',
+        ], 400);
+    }
+
+    /**
+     * Passwort ändern für eingeloggte Nutzer (in den Einstellungen).
+     */
+    public function changePassword(Request $request): JsonResponse
+    {
+        $request->validate([
+            'current_password' => 'required',
+            'password' => ['required', 'confirmed', Rules\Password::defaults()],
+        ]);
+
+        $user = $request->user();
+
+        if (! Hash::check($request->current_password, $user->password)) {
+            return response()->json([
+                'message' => 'Das aktuelle Passwort ist nicht korrekt.',
+            ], 422);
+        }
+
+             $user->update([
+            'password' => Hash::make($request->password),
+        ]);
+
+        $user->notify(new \App\Notifications\PasswordChangedNotification());
+
+        return response()->json([
+            'message' => 'Passwort erfolgreich geändert.',
+        ]);
+    }
 }

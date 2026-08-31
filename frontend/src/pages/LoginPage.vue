@@ -73,6 +73,9 @@
         </q-card-section>
       </q-card>
 
+         <p class="text-center q-mt-sm" style="color: #64748b; font-size: 13px">
+        <router-link to="/auth/forgot-password" style="color: #64748b; text-decoration: none">Passwort vergessen?</router-link>
+      </p>
       <p class="text-center q-mt-md" style="color: #64748b; font-size: 13px">
         Noch kein Konto?
         <router-link to="/auth/register" style="color: #1d4ed8; font-weight: 600; text-decoration: none">Jetzt registrieren</router-link>
