@@ -22,13 +22,32 @@ class QuoteController extends Controller
     /**
      * Alle Angebote der Firma.
      */
-    public function index(Request $request): JsonResponse
+      public function index(Request $request): JsonResponse
     {
-        $quotes = $request->user()->company->quotes()
+        $query = $request->user()->company->quotes()
             ->with('customer')
             ->withCount('items')
-            ->orderBy('created_at', 'desc')
-            ->paginate(20);
+            ->orderBy('created_at', 'desc');
+
+        if ($request->filled('status')) {
+            $query->where('status', $request->input('status'));
+        }
+
+        if ($request->filled('search')) {
+            $search = $request->input('search');
+            $query->where(function ($q) use ($search) {
+                $q->where('quote_number', 'like', "%{$search}%")
+                    ->orWhere('project_title', 'like', "%{$search}%")
+                    ->orWhereHas('customer', function ($c) use ($search) {
+                        $c->where('company_name', 'like', "%{$search}%")
+                            ->orWhere('first_name', 'like', "%{$search}%")
+                            ->orWhere('last_name', 'like', "%{$search}%");
+                    });
+            });
+        }
+
+        $perPage = min((int) $request->input('per_page', 12), 50);
+        $quotes = $query->paginate($perPage);
 
         return response()->json($quotes);
     }

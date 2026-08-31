@@ -19,16 +19,26 @@
       v-if="!$q.screen.lt.lg"
       v-model="leftDrawerOpen"
       show-if-above
-      :width="240"
+      :width="isDrawerExpanded ? 240 : 72"
       class="ap-drawer"
+      :class="{ 'is-mini': !isDrawerExpanded }"
+      @mouseenter="isDrawerExpanded = true"
+      @mouseleave="isDrawerExpanded = false"
     >
       <div class="ap-drawer-inner">
         <!-- Logo -->
         <div class="ap-logo-area">
           <img
+            v-if="isDrawerExpanded"
             src="~assets/angebotspilot-logo.png"
             alt="AngebotsPilot"
             style="height: 60px; width: auto"
+          />
+          <q-icon
+            v-else
+            name="verified"
+            size="32px"
+            color="primary"
           />
         </div>
 
@@ -42,7 +52,12 @@
             :class="{ 'is-active': isActive(item.to) }"
           >
             <q-icon :name="item.icon" size="19px" class="ap-nav-icon" />
-            <span class="ap-nav-label">{{ item.label }}</span>
+            <span v-if="isDrawerExpanded" class="ap-nav-label">{{
+              item.label
+            }}</span>
+            <q-tooltip v-else anchor="center right" self="center left">
+              {{ item.label }}
+            </q-tooltip>
           </router-link>
         </q-list>
 
@@ -52,28 +67,33 @@
         <div class="ap-footer-block">
           <button class="ap-feedback-row" @click="showFeedbackDialog = true">
             <q-icon name="chat_bubble_outline" size="17px" />
-            <span>Feedback geben</span>
+            <span v-if="isDrawerExpanded">Feedback geben</span>
+            <q-tooltip v-else anchor="center right" self="center left">
+              Feedback geben
+            </q-tooltip>
           </button>
         </div>
 
         <!-- User -->
         <div class="ap-user-row">
           <div class="ap-user-avatar">{{ userInitials }}</div>
-          <div class="ap-user-info">
-            <div class="ap-user-name">{{ authStore.userName }}</div>
-            <div class="ap-user-company">{{ authStore.company?.name }}</div>
-          </div>
-          <q-btn
-            flat
-            round
-            dense
-            icon="logout"
-            size="sm"
-            class="ap-logout-btn"
-            @click="onLogout"
-          >
-            <q-tooltip>Abmelden</q-tooltip>
-          </q-btn>
+          <template v-if="isDrawerExpanded">
+            <div class="ap-user-info">
+              <div class="ap-user-name">{{ authStore.userName }}</div>
+              <div class="ap-user-company">{{ authStore.company?.name }}</div>
+            </div>
+            <q-btn
+              flat
+              round
+              dense
+              icon="logout"
+              size="sm"
+              class="ap-logout-btn"
+              @click="onLogout"
+            >
+              <q-tooltip>Abmelden</q-tooltip>
+            </q-btn>
+          </template>
         </div>
       </div>
     </q-drawer>
@@ -133,6 +153,7 @@ export default {
     const route = useRoute();
     const leftDrawerOpen = ref(true);
     const showFeedbackDialog = ref(false);
+    const isDrawerExpanded = ref(false);
 
     const menuItems = [
       { label: "Dashboard", icon: "dashboard", to: "/dashboard" },
@@ -176,6 +197,7 @@ export default {
       onLogout,
       isActive,
       showFeedbackDialog,
+      isDrawerExpanded,
     };
   },
 };
@@ -192,16 +214,35 @@ export default {
 .ap-drawer {
   background: #ffffff;
   border-right: 1px solid #eceef4 !important;
+  transition: width 0.18s ease;
+  z-index: 3000;
 }
 .ap-drawer-inner {
   display: flex;
   flex-direction: column;
   height: 100%;
   padding: 18px 14px 16px;
+  overflow: hidden;
+}
+.ap-drawer.is-mini .ap-drawer-inner {
+  padding-left: 10px;
+  padding-right: 10px;
+}
+.ap-drawer.is-mini .ap-nav-item {
+  justify-content: center;
+  padding: 9px;
+}
+.ap-drawer.is-mini .ap-user-row {
+  justify-content: center;
+  padding: 12px 0 4px;
 }
 
 .ap-logo-area {
   padding: 4px 8px 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 60px;
 }
 
 .ap-nav-list {
@@ -228,7 +269,7 @@ export default {
 }
 .ap-nav-item.is-active {
   background: #eef0ff;
-  color: #4f46e5;
+  color: #1976D2;
   font-weight: 600;
 }
 .ap-nav-icon {
@@ -262,7 +303,7 @@ export default {
 }
 .ap-feedback-row:hover {
   background: #f4f5fa;
-  color: #4f46e5;
+  color: #1976D2;
 }
 
 .ap-user-row {
@@ -276,7 +317,7 @@ export default {
   width: 34px;
   height: 34px;
   border-radius: 10px;
-  background: linear-gradient(135deg, #4f46e5, #6366f1);
+  background: linear-gradient(135deg, #1976D2, #6366f1);
   color: #fff;
   display: flex;
   align-items: center;
@@ -337,7 +378,7 @@ export default {
 .is-urgent .ap-trial-text { color: #b91c1c; }
 
 .ap-trial-cta {
-  background: #4f46e5;
+  background: #1976D2;
   color: #fff;
   padding: 6px 16px;
   border-radius: 8px;

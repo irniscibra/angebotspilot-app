@@ -9,14 +9,29 @@ export const useQuoteStore = defineStore('quotes', {
     generating: false,
     error: null,
     stats: null,
+    pagination: {
+      currentPage: 1,
+      lastPage: 1,
+      total: 0,
+      perPage: 12,
+    },
   }),
 
   actions: {
-    async fetchQuotes() {
+    async fetchQuotes(params = {}) {
       this.loading = true
       try {
-        const response = await api.get('/quotes')
+        const response = await api.get('/quotes', { params })
+        // Backend liefert Laravel-Paginator-Struktur { data, current_page, ... }
         this.quotes = response.data.data || response.data
+        if (response.data.current_page !== undefined) {
+          this.pagination = {
+            currentPage: response.data.current_page,
+            lastPage: response.data.last_page,
+            total: response.data.total,
+            perPage: response.data.per_page,
+          }
+        }
       } catch (err) {
         this.error = err.response?.data?.message || 'Fehler beim Laden'
       } finally {
