@@ -16,7 +16,7 @@ class LvImportController extends Controller
      * (scanPrepare/scanUpload), damit große Uploads nicht an einem
      * einzigen, langen HTTP-Request hängen.
      */
-    public function prepare(Request $request): JsonResponse
+   public function prepare(Request $request): JsonResponse
     {
         $request->validate([
             'customer_id' => 'nullable|exists:customers,id',
@@ -24,6 +24,17 @@ class LvImportController extends Controller
         ]);
 
         $company = $request->user()->company;
+
+        // LV-Import ist ein Pro-Feature. Während der Testphase (Trial)
+        // bleibt es für alle sichtbar/nutzbar, damit Interessenten es
+        // ausprobieren können. Sobald ein Plan aktiv ist, ist es nur
+        // noch für Pro freigeschaltet.
+        if (!$company->isTrialActive() && !$company->hasProAccess()) {
+            return response()->json([
+                'message' => 'LV-Import ist ein Pro-Feature. Bitte upgraden Sie auf den Pro-Plan, um Ausschreibungen zu importieren.',
+                'requires_pro' => true,
+            ], 403);
+        }
 
         $quote = Quote::create([
             'company_id' => $company->id,

@@ -431,13 +431,25 @@
                 </span>
               </div>
 
-              <div
+                     <div
                 v-if="authStore.company?.subscription_started_at"
                 class="ap-muted"
                 style="font-size: 12.5px; margin-top: 4px"
               >
                 Kunde seit
                 {{ formatDate(authStore.company?.subscription_started_at) }}
+              </div>
+
+              <div
+                v-if="
+                  authStore.company?.current_period_end &&
+                  !authStore.company?.cancelled_at
+                "
+                class="ap-muted"
+                style="font-size: 12.5px; margin-top: 2px"
+              >
+                Nächste Abbuchung am
+                {{ formatDate(authStore.company?.current_period_end) }}
               </div>
 
               <div
@@ -463,7 +475,7 @@
               </div>
               <q-btn
                 v-else-if="
-                  ['starter', 'professional', 'enterprise'].includes(
+                  ['starter', 'professional', 'enterprise', 'pro'].includes(
                     authStore.company?.plan,
                   )
                 "
@@ -796,6 +808,7 @@ export default {
           starter: "Starter",
           professional: "Professional",
           enterprise: "Enterprise",
+          pro: "Pro",
         })[authStore.company?.plan] || "Trial",
     );
 
@@ -806,6 +819,7 @@ export default {
           starter: "blue",
           professional: "indigo",
           enterprise: "purple",
+          pro: "purple",
         })[authStore.company?.plan] || "grey",
     );
 

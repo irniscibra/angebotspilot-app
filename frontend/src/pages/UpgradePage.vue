@@ -29,20 +29,48 @@
         />
       </div>
 
-      <!-- Pricing Card – Ein Plan -->
-      <div class="pricing-center">
+           <!-- Pricing Cards – Zwei Pläne -->
+      <div class="pricing-center pricing-center--two">
         <div class="pricing-card pricing-card--featured">
           <div class="plan-badge">Alle Features inklusive</div>
 
           <div class="plan-name">AngebotsPilot</div>
 
-          <div class="plan-price">
+                    <div class="plan-price">
             <span class="price-amount">39</span>
             <span class="price-currency">€</span>
             <div class="price-right">
               <div class="price-period">pro Nutzer / Monat</div>
-              <div class="price-note">zzgl. 19% MwSt. · monatlich kündbar</div>
+              <div class="price-note">Gemäß §19 UStG ohne MwSt. · monatlich kündbar</div>
             </div>
+          </div>
+
+          <div class="qty-selector">
+            <span class="qty-label">Anzahl Nutzer</span>
+            <div class="qty-stepper">
+              <q-btn
+                round
+                dense
+                flat
+                icon="remove"
+                text-color="white"
+                @click="decrementQty"
+                :disable="quantity <= 1"
+              />
+              <span class="qty-value">{{ quantity }}</span>
+              <q-btn
+                round
+                dense
+                flat
+                icon="add"
+                text-color="white"
+                @click="incrementQty"
+              />
+            </div>
+          </div>
+
+                   <div class="qty-total">
+            Monatlich gesamt: <strong>{{ totalPrice }} €</strong>
           </div>
 
           <q-separator dark class="q-my-lg" />
@@ -62,7 +90,7 @@
             <div class="feature-item">✅ E-Mail Support</div>
           </div>
 
-          <q-btn
+              <q-btn
             color="white"
             text-color="primary"
             label="Jetzt abonnieren"
@@ -70,7 +98,51 @@
             class="full-width q-mt-xl"
             size="lg"
             icon-right="arrow_forward"
+            :loading="checkoutLoading"
             @click="subscribe"
+          />
+
+                 <div class="guarantee-text">
+            🔒 Ihre Daten bleiben sicher · Jederzeit kündbar
+          </div>
+        </div>
+
+        <!-- Pro Plan -->
+        <div class="pricing-card pricing-card--pro">
+          <div class="plan-badge plan-badge--pro">Für Ausschreibungen</div>
+
+          <div class="plan-name">AngebotsPilot Pro</div>
+
+          <div class="plan-price">
+            <span class="price-amount">69</span>
+            <span class="price-currency">€</span>
+            <div class="price-right">
+              <div class="price-period">pro Firma / Monat</div>
+              <div class="price-note">Gemäß §19 UStG ohne MwSt. · monatlich kündbar</div>
+            </div>
+          </div>
+
+          <q-separator dark class="q-my-lg" />
+
+          <div class="feature-item feature-item--highlight">
+            🎯 Alles aus Starter, plus:
+          </div>
+          <div class="features-grid q-mt-sm">
+            <div class="feature-item">✅ LV-Import für Ausschreibungen</div>
+            <div class="feature-item">✅ PDF automatisch einlesen</div>
+            <div class="feature-item">✅ KI-Marktpreisschätzung</div>
+          </div>
+
+          <q-btn
+            color="white"
+            text-color="purple-10"
+            label="Pro abonnieren"
+            unelevated
+            class="full-width q-mt-xl"
+            size="lg"
+            icon-right="arrow_forward"
+            :loading="checkoutLoadingPro"
+            @click="subscribePro"
           />
 
           <div class="guarantee-text">
@@ -80,36 +152,17 @@
       </div>
 
       <!-- Beispielrechnung -->
-      <div class="example-box">
-        <div class="example-title">💡 Beispielrechnung</div>
-        <div class="example-grid">
-          <div class="example-item">
-            <div class="example-users">1 Nutzer</div>
-            <div class="example-price">39,00 € / Monat</div>
-            <div class="example-note">zzgl. MwSt.</div>
-          </div>
-          <div class="example-item">
-            <div class="example-users">3 Nutzer</div>
-            <div class="example-price">117,00 € / Monat</div>
-            <div class="example-note">zzgl. MwSt.</div>
-          </div>
-          <div class="example-item">
-            <div class="example-users">5 Nutzer</div>
-            <div class="example-price">195,00 € / Monat</div>
-            <div class="example-note">zzgl. MwSt.</div>
-          </div>
-        </div>
-      </div>
+
 
       <!-- Rechtliche Hinweise -->
       <div class="legal-box">
         <div class="legal-title">⚖️ Rechtliche Informationen</div>
-        <div class="legal-text">
-          Alle Preise verstehen sich netto zzgl. der gesetzlichen Umsatzsteuer von derzeit 19%.
+                <div class="legal-text">
+          Gemäß §19 UStG (Kleinunternehmerregelung) wird keine Umsatzsteuer berechnet oder ausgewiesen.
           Das Abonnement verlängert sich automatisch um einen weiteren Monat, sofern es nicht
           spätestens <strong>14 Tage vor Verlängerungsdatum</strong> schriftlich per E-Mail gekündigt wird.
           <br><br>
-          Kündigung an: <a href="mailto:info@nettwebsolutions.de">info@nettwebsolutions.de</a>
+          Kündigung an: <a href="mailto:info@angebotspilot.app">info@angebotspilot.app</a>
           <br><br>
           Ihre gespeicherten Daten (Angebote, Rechnungen, Kunden) bleiben nach Ablauf des Testzeitraums
           für <strong>30 Tage</strong> erhalten und werden danach unwiderruflich gelöscht.
@@ -123,7 +176,7 @@
       <div class="contact-box">
         <q-icon name="help_outline" size="20px" color="grey-6" />
         <span>Fragen? Wir helfen gerne:</span>
-        <a href="mailto:info@nettwebsolutions.de">info@nettwebsolutions.de</a>
+        <a href="mailto:info@angebotspilot.app">info@angebotspilot.app</a>
         <span class="q-mx-sm">·</span>
         <a href="tel:+491629867099">+49 162 9867099</a>
       </div>
@@ -142,7 +195,7 @@
             Die automatische Stripe-Bezahlung wird gerade eingerichtet.<br>
             Kontaktieren Sie uns direkt – wir aktivieren Ihren Zugang <strong>innerhalb von 24 Stunden</strong>.
           </p>
-          <q-chip color="primary" text-color="white" icon="mail" label="info@nettwebsolutions.de" />
+          <q-chip color="primary" text-color="white" icon="mail" label="info@angebotspilot.app" />
         </q-card-section>
         <q-card-actions align="center" class="q-pb-lg q-gutter-sm">
           <q-btn
@@ -161,20 +214,69 @@
 </template>
 
 <script setup>
-import { ref } from 'vue'
+import { ref, computed } from 'vue'
 import { useAuthStore } from 'src/stores/auth'
+import { useQuasar } from 'quasar'
+import { api } from 'src/boot/axios'
 
 const authStore = useAuthStore()
-const comingSoonDialog = ref(false)
+const $q = useQuasar()
 
-function subscribe() {
-  // TODO: Stripe Checkout
-  comingSoonDialog.value = true
+const quantity = ref(1)
+const checkoutLoading = ref(false)
+const checkoutLoadingPro = ref(false)
+
+const totalPrice = computed(() =>
+  (quantity.value * 39).toLocaleString('de-DE', {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  })
+)
+
+function incrementQty() {
+  quantity.value++
+}
+function decrementQty() {
+  if (quantity.value > 1) quantity.value--
 }
 
-function openMail() {
-  const company = authStore.company?.name || ''
-  window.location.href = `mailto:info@nettwebsolutions.de?subject=AngebotsPilot Abonnement – 39€/Nutzer&body=Hallo,%0A%0Aich möchte AngebotsPilot abonnieren (39€ pro Nutzer/Monat).%0A%0AUnternehmen: ${company}%0A%0AMit freundlichen Grüßen`
+async function subscribe() {
+  checkoutLoading.value = true
+  try {
+    const res = await api.post('/stripe/checkout', {
+      plan: 'starter',
+      quantity: quantity.value,
+    })
+    window.location.href = res.data.checkout_url
+  } catch (e) {
+    $q.notify({
+      type: 'negative',
+      message:
+        e.response?.data?.message ||
+        'Checkout konnte nicht gestartet werden. Bitte versuchen Sie es erneut.',
+    })
+  } finally {
+    checkoutLoading.value = false
+  }
+}
+
+async function subscribePro() {
+  checkoutLoadingPro.value = true
+  try {
+    const res = await api.post('/stripe/checkout', {
+      plan: 'pro',
+    })
+    window.location.href = res.data.checkout_url
+  } catch (e) {
+    $q.notify({
+      type: 'negative',
+      message:
+        e.response?.data?.message ||
+        'Checkout konnte nicht gestartet werden. Bitte versuchen Sie es erneut.',
+    })
+  } finally {
+    checkoutLoadingPro.value = false
+  }
 }
 </script>
 
@@ -322,4 +424,80 @@ function openMail() {
   flex-wrap: wrap;
 }
 .contact-box a { color: #1d4ed8; font-weight: 600; text-decoration: none; }
+
+.qty-selector {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 20px;
+}
+.qty-label {
+  font-size: 14px;
+  color: rgba(255, 255, 255, 0.85);
+  font-weight: 600;
+}
+.qty-stepper {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 10px;
+  padding: 2px 8px;
+}
+.qty-value {
+  font-size: 16px;
+  font-weight: 700;
+  color: white;
+  min-width: 24px;
+  text-align: center;
+}
+.qty-total {
+  font-size: 14px;
+  color: rgba(255, 255, 255, 0.9);
+  margin-top: 12px;
+  text-align: right;
+}
+
+.pricing-center--two {
+  display: flex;
+  gap: 24px;
+  align-items: stretch;
+  flex-wrap: wrap;
+  justify-content: center;
+  max-width: 1040px;
+  margin: 0 auto;
+  width: 100vw;
+  position: relative;
+  left: 50%;
+  right: 50%;
+  margin-left: -520px;
+  margin-right: -520px;
+}
+@media (max-width: 1088px) {
+  .pricing-center--two {
+    width: auto;
+    left: auto;
+    right: auto;
+    margin-left: auto;
+    margin-right: auto;
+  }
+}
+.pricing-center--two .pricing-card {
+  flex: 1 1 320px;
+  max-width: 360px;
+}
+.pricing-card--pro {
+  background: linear-gradient(135deg, #5b21b6 0%, #7c3aed 100%);
+  border-color: #6d28d9;
+  color: white;
+}
+.plan-badge--pro {
+  background: #a78bfa;
+}
+.feature-item--highlight {
+  font-size: 13px;
+  font-weight: 700;
+  color: white;
+  margin-bottom: 4px;
+}
 </style>

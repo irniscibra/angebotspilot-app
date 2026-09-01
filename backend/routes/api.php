@@ -19,6 +19,7 @@ use App\Http\Controllers\Api\EmailVerificationController;
 use App\Http\Controllers\Api\MahnungController;
 use App\Http\Controllers\Api\FeedbackController;
 use App\Http\Controllers\Api\LvImportController;
+use App\Http\Controllers\Api\StripeController;
 
 
 /*
@@ -46,6 +47,9 @@ Route::get('/email-verify/{id}/{hash}', [EmailVerificationController::class, 've
     Route::get('public/quotes/{uuid}', [PublicQuoteController::class, 'show']);
     Route::post('public/quotes/{uuid}/accept', [PublicQuoteController::class, 'accept']);
     Route::post('public/quotes/{uuid}/reject', [PublicQuoteController::class, 'reject']);
+    // Stripe Webhook - öffentlich erreichbar, Absicherung erfolgt über
+    // Signaturprüfung im Controller selbst, NICHT über auth:sanctum
+    Route::post('stripe/webhook', [StripeController::class, 'webhook']);
 
 // ── Geschützte Routen (Sanctum) ──
     Route::middleware('auth:sanctum')->group(function () {
@@ -54,6 +58,16 @@ Route::get('/email-verify/{id}/{hash}', [EmailVerificationController::class, 've
     Route::post('auth/logout', [AuthController::class, 'logout']);
     Route::get('auth/me', [AuthController::class, 'me']);
     Route::post('auth/change-password', [AuthController::class, 'changePassword']);
+
+        // Auth-Routen: KEIN Subscription-Check (immer erreichbar)
+    Route::post('auth/logout', [AuthController::class, 'logout']);
+    Route::get('auth/me', [AuthController::class, 'me']);
+    Route::post('auth/change-password', [AuthController::class, 'changePassword']);
+
+    // Stripe Checkout: KEIN Subscription-Check (muss auch bei
+    // gesperrtem/abgelaufenem Zugriff erreichbar sein, damit man
+    // überhaupt upgraden kann)
+    Route::post('stripe/checkout', [StripeController::class, 'createCheckoutSession']);
      // Abo-Verwaltung: KEIN Subscription-Check (muss auch bei gesperrtem Zugriff erreichbar sein)
     Route::get('company/subscription', [CompanyController::class, 'show']);
     Route::post('company/cancel-subscription', [CompanyController::class, 'cancelSubscription']);

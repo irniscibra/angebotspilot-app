@@ -228,13 +228,14 @@
               >
                 PDF importieren
               </div>
-   <div style="font-size: 12px; color: #64748b; margin-top: 4px">
+              <div style="font-size: 12px; color: #64748b; margin-top: 4px">
                 Fremdes Angebot hochladen, KI übernimmt Positionen
               </div>
             </q-card-section>
           </q-card>
 
           <q-card
+            v-if="authStore.hasLvImportAccess"
             flat
             clickable
             @click="createMode = 'lv'"
@@ -278,8 +279,7 @@
                 LV importieren
               </div>
               <div style="font-size: 12px; color: #64748b; margin-top: 4px">
-                Ausschreibung hochladen – Positionen automatisch
-                strukturieren
+                Ausschreibung hochladen – Positionen automatisch strukturieren
               </div>
             </q-card-section>
           </q-card>
@@ -871,7 +871,7 @@
                 </q-banner>
               </div>
 
-               <q-btn
+              <q-btn
                 color="red-7"
                 icon="picture_as_pdf"
                 label="Angebot importieren"
@@ -1031,8 +1031,8 @@
                   "
                 >
                   Bei Ausschreibungen sind die Preise bewusst leer – Sie
-                  kalkulieren selbst. Alle Mengen und Einheiten wurden exakt
-                  aus dem Dokument übernommen.
+                  kalkulieren selbst. Alle Mengen und Einheiten wurden exakt aus
+                  dem Dokument übernommen.
                 </div>
               </q-banner>
 
@@ -1174,9 +1174,7 @@
                   >
                     KI strukturiert alle Positionen automatisch
                   </div>
-                  <div
-                    style="font-size: 12px; color: #6d28d9; margin-top: 2px"
-                  >
+                  <div style="font-size: 12px; color: #6d28d9; margin-top: 2px">
                     Mengen, Einheiten und Fabrikate werden exakt aus dem
                     Dokument übernommen. Preise bleiben bewusst leer – Sie
                     kalkulieren selbst.
@@ -1199,12 +1197,10 @@
                   >
                     Große Dokumente brauchen etwas Zeit
                   </div>
-                  <div
-                    style="font-size: 12px; color: #b45309; margin-top: 2px"
-                  >
+                  <div style="font-size: 12px; color: #b45309; margin-top: 2px">
                     Bei umfangreichen Ausschreibungen (100+ Seiten) dauert die
-                    Verarbeitung 2–5 Minuten. Sie sehen den Fortschritt live
-                    auf dieser Seite.
+                    Verarbeitung 2–5 Minuten. Sie sehen den Fortschritt live auf
+                    dieser Seite.
                   </div>
                 </q-banner>
               </div>
@@ -1577,7 +1573,7 @@ export default {
       "Katalog-Matching & Preisschätzung",
       "Angebot wird fertiggestellt",
     ];
-        let scanPollInterval = null;
+    let scanPollInterval = null;
     let scanStepInterval = null;
 
     // LV Import (Ausschreibungen) Polling State
@@ -1639,7 +1635,7 @@ export default {
       loadTemplates();
     });
 
-      onUnmounted(() => {
+    onUnmounted(() => {
       if (scanPollInterval) clearInterval(scanPollInterval);
       if (scanStepInterval) clearInterval(scanStepInterval);
       if (lvPollInterval) clearInterval(lvPollInterval);
@@ -1974,7 +1970,7 @@ export default {
             message: e.response?.data?.message || "Fehler beim Import",
           });
         }
-      // Wenn upload fehlschlägt aber polling läuft → ignorieren, job läuft trotzdem
+        // Wenn upload fehlschlägt aber polling läuft → ignorieren, job läuft trotzdem
       }
     };
 

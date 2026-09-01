@@ -28,7 +28,7 @@ export const useAuthStore = defineStore('auth', {
     trialExpired: (state) => {
       const company = state.user?.company
       if (!company) return false
-      if (['starter', 'professional', 'enterprise'].includes(company.plan)) return false
+      if (['starter', 'professional', 'enterprise', 'pro'].includes(company.plan)) return false
       if (!company.trial_ends_at) return false
       return new Date(company.trial_ends_at) < new Date()
     },
@@ -36,8 +36,28 @@ export const useAuthStore = defineStore('auth', {
     hasActiveSubscription: (state) => {
       const company = state.user?.company
       if (!company) return false
-      if (['starter', 'professional', 'enterprise'].includes(company.plan)) return true
+      if (['starter', 'professional', 'enterprise', 'pro'].includes(company.plan)) return true
       if (company.plan === 'trial' && new Date(company.trial_ends_at) > new Date()) return true
+      return false
+    },
+
+    // Trial ist noch aktiv (Zeitraum nicht abgelaufen UND Plan ist noch "trial")
+    isTrialActive: (state) => {
+      const company = state.user?.company
+      if (!company || company.plan !== 'trial') return false
+      if (!company.trial_ends_at) return false
+      return new Date(company.trial_ends_at) > new Date()
+    },
+
+    // LV-Import ist ein Pro-Feature. Während der Testphase für alle
+    // sichtbar, danach nur noch für den Pro-Plan.
+    hasLvImportAccess: (state) => {
+      const company = state.user?.company
+      if (!company) return false
+      if (company.plan === 'pro') return true
+      if (company.plan === 'trial' && company.trial_ends_at) {
+        return new Date(company.trial_ends_at) > new Date()
+      }
       return false
     },
   },

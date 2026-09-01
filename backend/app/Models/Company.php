@@ -54,6 +54,9 @@ class Company extends Model
         'cancelled_at',
         'access_until',
         'trial_quotes_used',
+       'stripe_customer_id',
+        'stripe_subscription_id',
+        'current_period_end',
     ];
 
     protected $casts = [
@@ -69,7 +72,8 @@ class Company extends Model
         'trial_ends_at' => 'datetime',
         'subscription_started_at' => 'datetime',
         'cancelled_at' => 'datetime',
-        'access_until' => 'datetime',
+         'access_until' => 'datetime',
+        'current_period_end' => 'datetime',
     ];
 
     protected static function booted(): void
@@ -165,7 +169,7 @@ public function trialQuotesRemaining(): int
 
 public function canGenerateQuote(): bool
 {
-    if (in_array($this->plan, ['starter', 'professional', 'enterprise'])) {
+    if (in_array($this->plan, ['starter', 'professional', 'enterprise', 'pro'])) {
         return true;
     }
 
@@ -188,7 +192,20 @@ public function hasActiveSubscription(): bool
         return false;
     }
 
-    return in_array($this->plan, ['starter', 'professional', 'enterprise']) || $this->isTrialActive();
+    return in_array($this->plan, ['starter', 'professional', 'enterprise', 'pro']) || $this->isTrialActive();
 }
+
+    /**
+     * Prüft, ob die Firma Zugriff auf Pro-Features hat (z.B. LV-Import).
+     * Nur der aktive "pro"-Plan berechtigt dazu - Trial und Starter nicht.
+     */
+    public function hasProAccess(): bool
+    {
+        if ($this->isAccessLocked()) {
+            return false;
+        }
+
+        return $this->plan === 'pro';
+    }
 
 }
