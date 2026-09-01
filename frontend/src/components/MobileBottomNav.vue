@@ -12,8 +12,9 @@
         <span class="nav-item__label">{{ item.label }}</span>
       </router-link>
 
-      <!-- Zentraler "Neu"-Button, hervorgehoben -->
-      <router-link to="/quotes/create" class="nav-item nav-item--fab">
+      <!-- Zentraler "Neu"-Button, hervorgehoben - Mitarbeiter duerfen keine
+           Angebote anlegen, daher ausgeblendet -->
+      <router-link v-if="!isEmployee" to="/quotes/create" class="nav-item nav-item--fab">
         <div class="nav-item__fab-circle">
           <q-icon name="add" size="24px" color="white" />
         </div>
@@ -72,7 +73,7 @@
 </template>
 
 <script>
-import { ref } from "vue";
+import { computed, ref } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { useAuthStore } from "src/stores/auth";
 
@@ -90,24 +91,36 @@ export default {
       router.push("/auth/login");
     };
 
-    const mainItems = [
-      { label: "Home", icon: "dashboard", to: "/dashboard" },
-      { label: "Angebote", icon: "description", to: "/quotes" },
-    ];
+    const isEmployee = computed(() => authStore.user?.role === "employee");
 
-    const secondaryItems = [
-      { label: "Kunden", icon: "people", to: "/customers" },
-    ];
+    const mainItems = computed(() => {
+      if (isEmployee.value) {
+        return [{ label: "Projekte", icon: "folder", to: "/projects" }];
+      }
+      return [
+        { label: "Home", icon: "dashboard", to: "/dashboard" },
+        { label: "Angebote", icon: "description", to: "/quotes" },
+      ];
+    });
 
-    const moreItems = [
-      { label: "Projekte", icon: "folder", to: "/projects" },
-      { label: "Materialkatalog", icon: "inventory_2", to: "/materials" },
-      { label: "Datanorm Import", icon: "upload_file", to: "/datanorm" },
-      { label: "Rechnungen", icon: "receipt_long", to: "/invoices" },
-      { label: "Protokolle", icon: "assignment_turned_in", to: "/protokolle" },
-      { label: "Leistungsvorlagen", icon: "content_paste", to: "/vorlagen" },
-      { label: "Einstellungen", icon: "settings", to: "/settings" },
-    ];
+    const secondaryItems = computed(() => {
+      if (isEmployee.value) return [];
+      return [{ label: "Kunden", icon: "people", to: "/customers" }];
+    });
+
+    const moreItems = computed(() => {
+      if (isEmployee.value) return [];
+      return [
+        { label: "Projekte", icon: "folder", to: "/projects" },
+        { label: "Materialkatalog", icon: "inventory_2", to: "/materials" },
+        { label: "Datanorm Import", icon: "upload_file", to: "/datanorm" },
+        { label: "Rechnungen", icon: "receipt_long", to: "/invoices" },
+        { label: "Protokolle", icon: "assignment_turned_in", to: "/protokolle" },
+        { label: "Team", icon: "groups", to: "/team" },
+        { label: "Leistungsvorlagen", icon: "content_paste", to: "/vorlagen" },
+        { label: "Einstellungen", icon: "settings", to: "/settings" },
+      ];
+    });
 
     const isActive = (to) =>
       route.path === to || route.path.startsWith(to + "/");
@@ -118,6 +131,7 @@ export default {
       moreItems,
       moreSheetOpen,
       isActive,
+      isEmployee,
         onLogout,
     };
   },

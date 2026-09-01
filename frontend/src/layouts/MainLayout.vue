@@ -155,19 +155,31 @@ export default {
     const showFeedbackDialog = ref(false);
     const isDrawerExpanded = ref(false);
 
-    const menuItems = [
-      { label: "Dashboard", icon: "dashboard", to: "/dashboard" },
-      { label: "Neues Angebot", icon: "add_circle", to: "/quotes/create" },
-      { label: "Projekte", icon: "folder", to: "/projects" },
-      { label: "Angebote", icon: "description", to: "/quotes" },
-      { label: "Rechnungen", icon: "receipt_long", to: "/invoices" },
-      { label: "Protokolle", icon: "assignment_turned_in", to: "/protokolle" },
-      { label: "Kunden", icon: "people", to: "/customers" },
-      { label: "Materialkatalog", icon: "inventory_2", to: "/materials" },
-      { label: "Leistungsvorlagen", icon: "content_paste", to: "/vorlagen" },
-      { label: "Datanorm Import", icon: "upload_file", to: "/datanorm" },
-      { label: "Einstellungen", icon: "settings", to: "/settings" },
-    ];
+    // Mitarbeiter (role=employee) bekommen bewusst eine stark reduzierte
+    // Navigation - alles andere ist serverseitig ohnehin gesperrt (403),
+    // eine volle Navi wuerde nur zu kaputten Seiten fuehren.
+    const isEmployee = computed(() => authStore.user?.role === "employee");
+
+    const menuItems = computed(() => {
+      if (isEmployee.value) {
+        return [{ label: "Projekte", icon: "folder", to: "/projects" }];
+      }
+
+      return [
+        { label: "Dashboard", icon: "dashboard", to: "/dashboard" },
+        { label: "Neues Angebot", icon: "add_circle", to: "/quotes/create" },
+        { label: "Projekte", icon: "folder", to: "/projects" },
+        { label: "Angebote", icon: "description", to: "/quotes" },
+        { label: "Rechnungen", icon: "receipt_long", to: "/invoices" },
+        { label: "Protokolle", icon: "assignment_turned_in", to: "/protokolle" },
+        { label: "Kunden", icon: "people", to: "/customers" },
+        { label: "Team", icon: "groups", to: "/team" },
+        { label: "Materialkatalog", icon: "inventory_2", to: "/materials" },
+        { label: "Leistungsvorlagen", icon: "content_paste", to: "/vorlagen" },
+        { label: "Datanorm Import", icon: "upload_file", to: "/datanorm" },
+        { label: "Einstellungen", icon: "settings", to: "/settings" },
+      ];
+    });
 
     const isActive = (to) =>
       route.path === to ||

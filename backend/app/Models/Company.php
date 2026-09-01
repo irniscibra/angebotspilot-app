@@ -48,6 +48,7 @@ class Company extends Model
         'bank_account_holder',
         'is_small_business',
         'plan',
+        'employee_seats_purchased',
         'feedback_widget_enabled',
         'trial_ends_at',
         'subscription_started_at',
@@ -98,6 +99,11 @@ class Company extends Model
     public function owner()
     {
         return $this->users()->where('role', 'owner')->first();
+    }
+
+    public function employees()
+    {
+        return $this->users()->where('role', 'employee');
     }
 
     public function customers()
@@ -211,6 +217,38 @@ public function hasActiveSubscription(): bool
         }
 
         return $this->plan === 'pro';
+    }
+
+    /**
+     * Mitarbeiter-Sitzplaetze, die im jeweiligen Plan inkludiert sind
+     * (analog zu Plancraft: guenstige Mitarbeiter-Sitzplaetze getrennt von
+     * Owner/Admin-Zugaengen). Starter enthaelt bewusst 0 - das ist die
+     * aktuelle Vorgabe, dass der 39-EUR-Plan ohne Zukauf keine Mitarbeiter
+     * zulaesst.
+     */
+    public const EMPLOYEE_SEATS_INCLUDED = [
+        'trial' => 0,
+        'starter' => 0,
+        'professional' => 2,
+        'enterprise' => 5,
+        'pro' => 2,
+    ];
+
+    public function employeeSeatLimit(): int
+    {
+        $included = self::EMPLOYEE_SEATS_INCLUDED[$this->plan] ?? 0;
+
+        return $included + (int) $this->employee_seats_purchased;
+    }
+
+    public function activeEmployeeCount(): int
+    {
+        return $this->users()->where('role', 'employee')->count();
+    }
+
+    public function canAddEmployee(): bool
+    {
+        return $this->activeEmployeeCount() < $this->employeeSeatLimit();
     }
 
 }

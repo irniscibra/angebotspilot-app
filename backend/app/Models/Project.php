@@ -63,6 +63,16 @@ class Project extends Model
         return $this->hasMany(ProjectReport::class);
     }
 
+    public function assignments()
+    {
+        return $this->hasMany(ProjectAssignment::class);
+    }
+
+    public function assignedUsers()
+    {
+        return $this->belongsToMany(User::class, 'project_assignments')->withTimestamps();
+    }
+
     // ---- Business Logic ----
 
     public function getStatusLabelAttribute(): string

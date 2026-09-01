@@ -27,6 +27,7 @@
           style="background: #4f46e5; color: #ffffff; border-radius: 10px; font-weight: 600; padding: 6px 14px"
         >
           <q-list style="min-width: 220px">
+            <template v-if="isAdmin">
             <q-item
               clickable
               v-close-popup
@@ -45,6 +46,7 @@
               <q-item-section>Ausgabe erfassen</q-item-section>
             </q-item>
             <q-separator />
+            </template>
             <q-item clickable v-close-popup @click="$refs.photoInput.click()">
               <q-item-section avatar
                 ><q-icon name="add_a_photo" size="20px" color="#4f46e5"
@@ -204,6 +206,7 @@
         </q-card-section>
       </q-card>
 
+      <template v-if="isAdmin">
       <!-- Kosten-Übersicht: Plan (Angebot) vs. Ist (Ausgaben), plus Marge -->
       <q-card
         v-if="project.quotes?.length || project.invoices?.length || project.expenses?.length"
@@ -427,6 +430,89 @@
           </q-btn>
         </div>
       </div>
+
+      </template>
+
+      <!-- Team-Zuweisung: wer darf als Mitarbeiter auf dieses Projekt zugreifen -->
+      <template v-if="isAdmin">
+        <div class="row items-center justify-between q-mt-lg q-mb-sm">
+          <div class="ap-section-title">
+            <q-icon name="groups" size="18px" color="#64748b" class="q-mr-xs" />
+            Zugewiesenes Team
+            <span class="ap-section-count">{{ assignedUsers.length }}</span>
+          </div>
+          <q-btn
+            flat
+            no-caps
+            dense
+            icon="person_add"
+            label="Zuweisen"
+            @click="openAssignDialog"
+            style="color: #4f46e5; font-weight: 600"
+          />
+        </div>
+
+        <div v-if="assignedUsers.length === 0" class="ap-empty-card">
+          <q-icon name="groups" size="28px" color="#c6cad9" />
+          <div class="ap-empty-text">
+            Noch niemandem zugewiesen – Mitarbeiter sehen dieses Projekt erst, wenn sie hier zugewiesen sind.
+          </div>
+        </div>
+        <div v-else class="ap-list-card">
+          <div v-for="member in assignedUsers" :key="'au' + member.id" class="ap-list-row">
+            <div class="ap-list-avatar" style="background: #eef2ff; color: #4f46e5">
+              {{ initials(member.name) }}
+            </div>
+            <div class="ap-list-main">
+              <div class="ap-list-title">{{ member.name }}</div>
+              <div class="ap-list-sub">
+                {{ member.role === "admin" ? "Admin" : "Mitarbeiter" }} · {{ member.email }}
+              </div>
+            </div>
+            <q-btn
+              flat
+              round
+              dense
+              size="sm"
+              icon="close"
+              color="grey-5"
+              @click="onUnassign(member)"
+            >
+              <q-tooltip>Zuweisung entfernen</q-tooltip>
+            </q-btn>
+          </div>
+        </div>
+
+        <q-dialog v-model="assignDialog.open">
+          <q-card style="min-width: 360px; border-radius: 16px">
+            <q-card-section class="q-pa-lg">
+              <div style="font-weight: 700; font-size: 16px; color: #0f172a" class="q-mb-md">
+                Team-Mitglied zuweisen
+              </div>
+              <q-list v-if="assignableMembers.length" style="border: 1px solid #e2e8f0; border-radius: 10px; overflow: hidden">
+                <q-item v-for="m in assignableMembers" :key="m.id" clickable v-close-popup @click="onAssign(m)">
+                  <q-item-section avatar>
+                    <div class="ap-list-avatar" style="background: #eef2ff; color: #4f46e5; width: 32px; height: 32px; font-size: 12px">
+                      {{ initials(m.name) }}
+                    </div>
+                  </q-item-section>
+                  <q-item-section>
+                    <q-item-label>{{ m.name }}</q-item-label>
+                    <q-item-label caption>{{ m.role === "admin" ? "Admin" : "Mitarbeiter" }}</q-item-label>
+                  </q-item-section>
+                </q-item>
+              </q-list>
+              <div v-else style="color: #64748b; font-size: 13px">
+                Alle Team-Mitglieder sind bereits zugewiesen, oder es wurde noch niemand eingeladen.
+                <router-link to="/team" style="color: #4f46e5; font-weight: 600">Team verwalten</router-link>
+              </div>
+              <div class="text-right q-mt-md">
+                <q-btn flat no-caps label="Schließen" v-close-popup />
+              </div>
+            </q-card-section>
+          </q-card>
+        </q-dialog>
+      </template>
 
       <!-- Fotos -->
       <div class="row items-center q-mt-lg q-mb-sm">
@@ -778,6 +864,7 @@
 import { computed, onMounted, reactive, ref, watch } from "vue";
 import { useRoute } from "vue-router";
 import { useProjectStore } from "src/stores/projects";
+import { useAuthStore } from "src/stores/auth";
 import { useQuasar } from "quasar";
 import { api } from "src/boot/axios";
 
@@ -786,7 +873,81 @@ export default {
   setup() {
     const route = useRoute();
     const projectStore = useProjectStore();
+    const authStore = useAuthStore();
     const $q = useQuasar();
+
+    // Mitarbeiter (role=employee) sehen keine Angebote/Rechnungen/Ausgaben
+    // und duerfen niemanden zuweisen - siehe auch Backend-Sperren in
+    // routes/api.php (role:owner,admin). Diese Flags steuern nur die
+    // Anzeige, die eigentliche Absicherung passiert serverseitig.
+    const isAdmin = computed(() => authStore.user?.role !== "employee");
+
+    const assignedUsers = ref([]);
+    const teamMembers = ref([]);
+    const assignDialog = reactive({ open: false });
+
+    const assignableMembers = computed(() =>
+      teamMembers.value.filter(
+        (m) => m.role !== "owner" && !assignedUsers.value.some((a) => a.id === m.id)
+      )
+    );
+
+    const initials = (name) =>
+      (name || "")
+        .split(" ")
+        .map((w) => w[0])
+        .join("")
+        .toUpperCase()
+        .slice(0, 2);
+
+    const loadAssignments = async () => {
+      try {
+        const response = await api.get(`/projects/${route.params.id}/assignments`);
+        assignedUsers.value = response.data;
+      } catch (e) {
+        console.error(e);
+      }
+    };
+
+    const loadTeamMembers = async () => {
+      try {
+        const response = await api.get("/team");
+        teamMembers.value = response.data.members;
+      } catch (e) {
+        console.error(e);
+      }
+    };
+
+    const openAssignDialog = () => {
+      assignDialog.open = true;
+    };
+
+    const onAssign = async (member) => {
+      try {
+        const response = await api.post(`/projects/${route.params.id}/assignments`, {
+          user_id: member.id,
+        });
+        assignedUsers.value = response.data.assigned_users;
+        $q.notify({ type: "positive", message: `${member.name} zugewiesen.` });
+      } catch (e) {
+        $q.notify({
+          type: "negative",
+          message: e.response?.data?.message || "Zuweisung fehlgeschlagen",
+        });
+      }
+    };
+
+    const onUnassign = async (member) => {
+      try {
+        await api.delete(`/projects/${route.params.id}/assignments/${member.id}`);
+        assignedUsers.value = assignedUsers.value.filter((m) => m.id !== member.id);
+      } catch (e) {
+        $q.notify({
+          type: "negative",
+          message: e.response?.data?.message || "Konnte nicht entfernt werden",
+        });
+      }
+    };
 
     const loading = ref(true);
     const saving = ref(false);
@@ -832,7 +993,13 @@ export default {
       }
     };
 
-    onMounted(loadProject);
+    onMounted(async () => {
+      await loadProject();
+      if (isAdmin.value) {
+        loadAssignments();
+        loadTeamMembers();
+      }
+    });
 
     const resetForm = () => applyProjectToForm();
 
@@ -1409,6 +1576,14 @@ export default {
       onGenerateReportDraft,
       onSaveReport,
       onDeleteReport,
+      isAdmin,
+      assignedUsers,
+      assignableMembers,
+      assignDialog,
+      initials,
+      openAssignDialog,
+      onAssign,
+      onUnassign,
     };
   },
 };

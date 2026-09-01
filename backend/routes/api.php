@@ -24,6 +24,9 @@ use App\Http\Controllers\Api\MahnungController;
 use App\Http\Controllers\Api\FeedbackController;
 use App\Http\Controllers\Api\LvImportController;
 use App\Http\Controllers\Api\StripeController;
+use App\Http\Controllers\Api\TeamController;
+use App\Http\Controllers\Api\InviteController;
+use App\Http\Controllers\Api\ProjectAssignmentController;
 
 
 /*
@@ -55,6 +58,21 @@ Route::get('/email-verify/{id}/{hash}', [EmailVerificationController::class, 've
     // Signaturprüfung im Controller selbst, NICHT über auth:sanctum
     Route::post('stripe/webhook', [StripeController::class, 'webhook']);
 
+    // Mitarbeiter-Einladung annehmen - öffentlich, Absicherung über die
+    // 'signed'-Middleware (siehe EmployeeInviteNotification). Der
+    // eingeladene User hat noch keinen Account, mit dem er sich
+    // einloggen könnte, daher außerhalb von auth:sanctum.
+    Route::get('team/invite/{user}', [InviteController::class, 'show'])
+        ->middleware('signed')
+        ->name('team.invite.show');
+    // Bewusst dieselbe URI wie 'team.invite.show' (nur GET/POST
+    // unterschiedlich) - eine signierte URL bezieht sich immer auf eine
+    // exakte URI, die HTTP-Methode ist dabei egal. So gilt EIN Link aus
+    // der Einladungs-E-Mail sowohl fuers Anzeigen als auch fuers Annehmen.
+    Route::post('team/invite/{user}', [InviteController::class, 'accept'])
+        ->middleware('signed')
+        ->name('team.invite.accept');
+
 // ── Geschützte Routen (Sanctum) ──
     Route::middleware('auth:sanctum')->group(function () {
 
@@ -70,20 +88,47 @@ Route::get('/email-verify/{id}/{hash}', [EmailVerificationController::class, 've
 
     // Stripe Checkout: KEIN Subscription-Check (muss auch bei
     // gesperrtem/abgelaufenem Zugriff erreichbar sein, damit man
-    // überhaupt upgraden kann)
-    Route::post('stripe/checkout', [StripeController::class, 'createCheckoutSession']);
+    // überhaupt upgraden kann) - nur Owner/Admin dürfen das Abo verwalten
+    Route::middleware('role:owner,admin')->post('stripe/checkout', [StripeController::class, 'createCheckoutSession']);
      // Abo-Verwaltung: KEIN Subscription-Check (muss auch bei gesperrtem Zugriff erreichbar sein)
-    Route::get('company/subscription', [CompanyController::class, 'show']);
-    Route::post('company/cancel-subscription', [CompanyController::class, 'cancelSubscription']);
-    Route::post('company/reactivate-subscription', [CompanyController::class, 'reactivateSubscription']);
+    Route::middleware('role:owner,admin')->group(function () {
+        Route::get('company/subscription', [CompanyController::class, 'show']);
+        Route::post('company/cancel-subscription', [CompanyController::class, 'cancelSubscription']);
+        Route::post('company/reactivate-subscription', [CompanyController::class, 'reactivateSubscription']);
+    });
 
     // ── App-Routen: Subscription-Check aktiv ──
     Route::middleware('check.subscription')->group(function () {
 
+    // ── Mitarbeiter-zugänglich: eigene Baustellen-Dokumentation ──
+    // Zugriff wird zusätzlich pro Projekt geprüft (AuthorizesProjectAccess-Trait:
+    // Mitarbeiter nur auf ihnen zugewiesenen Projekten, Owner/Admin auf allen
+    // Projekten der eigenen Firma). Löschen bleibt bewusst Owner/Admin
+    // vorbehalten (siehe role-Block weiter unten), damit Dokumentation vor
+    // Ort nicht nachträglich entfernt werden kann.
+    Route::apiResource('projects', ProjectController::class)->only(['index', 'show']);
+
+    Route::get('projects/{project}/photos', [ProjectPhotoController::class, 'index']);
+    Route::post('projects/{project}/photos', [ProjectPhotoController::class, 'store']);
+    Route::put('projects/{project}/photos/{photo}', [ProjectPhotoController::class, 'update']);
+
+    Route::get('projects/{project}/reports', [ProjectReportController::class, 'index']);
+    Route::post('projects/{project}/reports', [ProjectReportController::class, 'store']);
+    Route::post('projects/{project}/reports/ai-draft', [ProjectReportController::class, 'generateDraft']);
+    Route::put('projects/{project}/reports/{report}', [ProjectReportController::class, 'update']);
+
+    // Feedback-Widget: für alle Rollen offen, keine geschäftskritischen Daten
+    Route::post('feedback', [FeedbackController::class, 'store']);
+
+    // ── Ab hier: ausschließlich Owner/Admin. Mitarbeiter dürfen keine
+    // Angebote, Rechnungen, Kundendaten, Firmeneinstellungen oder
+    // Kosten-/Margendaten sehen oder bearbeiten. ──
+    Route::middleware('role:owner,admin')->group(function () {
+
     // PDF Import für Angebote
     Route::post('quotes/import-pdf', [QuoteImportController::class, 'importFromPdf']);
     Route::get('quotes/{quoteId}/scan-status', [QuoteImportController::class, 'scanStatus']);
-    Route::post('quotes/scan-prepare', [QuoteImportController::class, 'scanPrepare']); //NEU 
+    Route::post('quotes/scan-prepare', [QuoteImportController::class, 'scanPrepare']); //NEU
     Route::post('quotes/{quoteId}/scan-upload', [QuoteImportController::class, 'scanUpload']); //NEU
 
     // LV-Import (Ausschreibungen) - eigenständig, für große GAEB-Dokumente
@@ -111,26 +156,30 @@ Route::get('/email-verify/{id}/{hash}', [EmailVerificationController::class, 've
     // Kunden
     Route::apiResource('customers', CustomerController::class);
 
-    // Projekte (digitale Bauakte / Projektmappe)
-    Route::apiResource('projects', ProjectController::class);
+    // Projekte: Anlegen/Bearbeiten/Löschen bleibt Owner/Admin vorbehalten
+    Route::post('projects', [ProjectController::class, 'store']);
+    Route::put('projects/{project}', [ProjectController::class, 'update']);
+    Route::delete('projects/{project}', [ProjectController::class, 'destroy']);
 
-    // Projekt-Ausgaben (Phase 3)
+    // Projekt-Ausgaben / Kosten-Übersicht (Phase 3) - enthält Margendaten,
+    // bewusst nicht für Mitarbeiter sichtbar
     Route::get('projects/{project}/expenses', [ProjectExpenseController::class, 'index']);
     Route::post('projects/{project}/expenses', [ProjectExpenseController::class, 'store']);
     Route::put('projects/{project}/expenses/{expense}', [ProjectExpenseController::class, 'update']);
     Route::delete('projects/{project}/expenses/{expense}', [ProjectExpenseController::class, 'destroy']);
 
-    // Projekt-Fotos (Baustellendokumentation)
-    Route::get('projects/{project}/photos', [ProjectPhotoController::class, 'index']);
-    Route::post('projects/{project}/photos', [ProjectPhotoController::class, 'store']);
-    Route::put('projects/{project}/photos/{photo}', [ProjectPhotoController::class, 'update']);
-    Route::delete('projects/{project}/photos/{photo}', [ProjectPhotoController::class, 'destroy']);
+    // Projekt-Zuweisungen (wer darf als Mitarbeiter auf dieses Projekt zugreifen)
+    Route::get('projects/{project}/assignments', [ProjectAssignmentController::class, 'index']);
+    Route::post('projects/{project}/assignments', [ProjectAssignmentController::class, 'store']);
+    Route::delete('projects/{project}/assignments/{user}', [ProjectAssignmentController::class, 'destroy']);
 
-    // Projekt-Bautagesberichte
-    Route::get('projects/{project}/reports', [ProjectReportController::class, 'index']);
-    Route::post('projects/{project}/reports', [ProjectReportController::class, 'store']);
-    Route::post('projects/{project}/reports/ai-draft', [ProjectReportController::class, 'generateDraft']);
-    Route::put('projects/{project}/reports/{report}', [ProjectReportController::class, 'update']);
+    // Team-Verwaltung (einladen, auflisten, entfernen)
+    Route::get('team', [TeamController::class, 'index']);
+    Route::post('team/invite', [TeamController::class, 'invite']);
+    Route::delete('team/{user}', [TeamController::class, 'destroy']);
+
+    // Projekt-Fotos / -Berichte: Löschen bleibt Owner/Admin vorbehalten
+    Route::delete('projects/{project}/photos/{photo}', [ProjectPhotoController::class, 'destroy']);
     Route::delete('projects/{project}/reports/{report}', [ProjectReportController::class, 'destroy']);
 
     // Firma
@@ -138,9 +187,6 @@ Route::get('/email-verify/{id}/{hash}', [EmailVerificationController::class, 've
     Route::put('company', [CompanyController::class, 'update']);
     Route::post('company/logo', [CompanyController::class, 'uploadLogo']);
     Route::delete('company/logo', [CompanyController::class, 'removeLogo']);
-
-       // Feedback
-    Route::post('feedback', [FeedbackController::class, 'store']);
 
 // Materialsuche (Autocomplete)
     Route::get('/materials/search', [MaterialController::class, 'search']);
@@ -244,6 +290,8 @@ Route::prefix('service-templates')->group(function () {
         Route::post('/{mahnung}/paid', [MahnungController::class, 'markAsPaid']);
         Route::post('/{mahnung}/cancel', [MahnungController::class, 'cancel']);
     });
+
+    }); // Ende role:owner,admin
 
     }); // Ende check.subscription
 });

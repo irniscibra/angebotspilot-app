@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Api;
 
+use App\Http\Controllers\Api\Concerns\AuthorizesProjectAccess;
 use App\Http\Controllers\Controller;
 use App\Models\Project;
 use Illuminate\Http\JsonResponse;
@@ -9,15 +10,25 @@ use Illuminate\Http\Request;
 
 class ProjectController extends Controller
 {
+    use AuthorizesProjectAccess;
+
     /**
      * Alle Projekte der Firma.
+     * Mitarbeiter sehen ausschliesslich Projekte, denen sie explizit
+     * zugewiesen sind - niemals die komplette Projektliste der Firma.
      */
     public function index(Request $request): JsonResponse
     {
-        $query = $request->user()->company->projects()
+        $user = $request->user();
+
+        $query = $user->company->projects()
             ->with('customer')
             ->withCount(['quotes', 'invoices'])
             ->orderBy('created_at', 'desc');
+
+        if ($user->role === 'employee') {
+            $query->whereHas('assignedUsers', fn ($q) => $q->whereKey($user->id));
+        }
 
         if ($request->filled('status')) {
             $query->where('status', $request->input('status'));
@@ -70,19 +81,29 @@ class ProjectController extends Controller
 
     /**
      * Einzelnes Projekt.
+     * Angebote/Rechnungen/Ausgaben (inkl. Margendaten) sind fuer Mitarbeiter
+     * tabu - die sehen hier bewusst nur die Baustellen-Dokumentation
+     * (Fotos, Bautagesberichte).
      */
     public function show(Request $request, Project $project): JsonResponse
     {
-        $this->authorizeProject($request, $project);
+        $this->authorizeProjectAccess($request, $project);
 
-        $project->load([
+        $user = $request->user();
+
+        $relations = [
             'customer',
-            'quotes' => fn ($q) => $q->orderBy('created_at', 'desc'),
-            'invoices' => fn ($q) => $q->orderBy('created_at', 'desc'),
-            'expenses' => fn ($q) => $q->orderBy('expense_date', 'desc')->orderBy('created_at', 'desc'),
             'photos' => fn ($q) => $q->orderBy('created_at', 'desc'),
             'reports' => fn ($q) => $q->orderBy('report_date', 'desc')->orderBy('created_at', 'desc'),
-        ]);
+        ];
+
+        if ($user->isAdmin()) {
+            $relations['quotes'] = fn ($q) => $q->orderBy('created_at', 'desc');
+            $relations['invoices'] = fn ($q) => $q->orderBy('created_at', 'desc');
+            $relations['expenses'] = fn ($q) => $q->orderBy('expense_date', 'desc')->orderBy('created_at', 'desc');
+        }
+
+        $project->load($relations);
 
         return response()->json($project);
     }
@@ -92,7 +113,7 @@ class ProjectController extends Controller
      */
     public function update(Request $request, Project $project): JsonResponse
     {
-        $this->authorizeProject($request, $project);
+        $this->authorizeProjectAccess($request, $project);
 
         $request->validate([
             'title' => 'sometimes|string|max:255',
@@ -113,31 +134,21 @@ class ProjectController extends Controller
     }
 
     /**
-     * Projekt löschen.
-     * Nur möglich, wenn keine Angebote oder Rechnungen mehr am Projekt hängen.
+     * Projekt loeschen.
+     * Nur moeglich, wenn keine Angebote oder Rechnungen mehr am Projekt haengen.
      */
     public function destroy(Request $request, Project $project): JsonResponse
     {
-        $this->authorizeProject($request, $project);
+        $this->authorizeProjectAccess($request, $project);
 
         if ($project->quotes()->exists() || $project->invoices()->exists()) {
             return response()->json([
-                'message' => 'Projekt kann nicht gelöscht werden, solange noch Angebote oder Rechnungen zugeordnet sind.',
+                'message' => 'Projekt kann nicht geloescht werden, solange noch Angebote oder Rechnungen zugeordnet sind.',
             ], 422);
         }
 
         $project->delete();
 
-        return response()->json(['message' => 'Projekt gelöscht.']);
-    }
-
-    /**
-     * Stellt sicher, dass das Projekt zur Firma des Users gehört.
-     */
-    private function authorizeProject(Request $request, Project $project): void
-    {
-        if ($project->company_id !== $request->user()->company_id) {
-            abort(403, 'Zugriff verweigert.');
-        }
+        return response()->json(['message' => 'Projekt geloescht.']);
     }
 }

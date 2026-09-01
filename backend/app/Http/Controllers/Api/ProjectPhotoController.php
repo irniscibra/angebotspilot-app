@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Api;
 
+use App\Http\Controllers\Api\Concerns\AuthorizesProjectAccess;
 use App\Http\Controllers\Controller;
 use App\Models\Project;
 use App\Models\ProjectPhoto;
@@ -11,6 +12,8 @@ use Illuminate\Support\Facades\Storage;
 
 class ProjectPhotoController extends Controller
 {
+    use AuthorizesProjectAccess;
+
     /**
      * Alle Fotos eines Projekts.
      */
@@ -90,9 +93,7 @@ class ProjectPhotoController extends Controller
      */
     private function authorizeProject(Request $request, Project $project): void
     {
-        if ($project->company_id !== $request->user()->company_id) {
-            abort(403, 'Zugriff verweigert.');
-        }
+        $this->authorizeProjectAccess($request, $project);
     }
 
     /**

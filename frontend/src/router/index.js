@@ -13,6 +13,11 @@ const routes = [
         component: () => import('pages/PublicQuoteView.vue'),
         meta: { public: true }
     },
+      {
+        path: '/accept-invite',
+        component: () => import('pages/AcceptInvitePage.vue'),
+        meta: { public: true }
+    },
   {
     path: "/auth",
     component: () => import("layouts/AuthLayout.vue"),
@@ -59,11 +64,13 @@ const routes = [
         path: "projects",
         name: "projects",
         component: () => import("pages/ProjectsListPage.vue"),
+        meta: { employeeAllowed: true },
       },
       {
         path: "projects/:id",
         name: "project-detail",
         component: () => import("pages/ProjectDetailPage.vue"),
+        meta: { employeeAllowed: true },
       },
       {
         path: "quotes/create",
@@ -84,6 +91,11 @@ const routes = [
         path: "materials",
         name: "materials",
         component: () => import("pages/MaterialsPage.vue"),
+      },
+      {
+        path: "team",
+        name: "team",
+        component: () => import("pages/TeamPage.vue"),
       },
       {
         path: "settings",
@@ -157,6 +169,7 @@ export default route(function () {
     const token = localStorage.getItem("auth_token");
     const requiresAuth = to.matched.some((record) => record.meta.requiresAuth);
     const skipSubscriptionCheck = to.matched.some((record) => record.meta.skipSubscriptionCheck);
+    const employeeAllowed = to.matched.some((record) => record.meta.employeeAllowed);
 
     // Nicht eingeloggt → Login
     if (requiresAuth && !token) {
@@ -168,6 +181,19 @@ export default route(function () {
     if (token && (to.name === "login" || to.name === "register")) {
       next({ name: "dashboard" });
       return;
+    }
+
+    // Mitarbeiter (role=employee) dürfen nur auf einen kleinen Teil der App
+    // zugreifen (siehe employeeAllowed-Meta) - Angebote, Rechnungen,
+    // Kunden, Firmeneinstellungen etc. sind serverseitig ohnehin gesperrt
+    // (403), das hier verhindert nur die kaputte Seite/Fehlermeldung und
+    // schickt stattdessen direkt zu den zugewiesenen Projekten.
+    if (token && requiresAuth && !employeeAllowed) {
+      const authStore = useAuthStore();
+      if (authStore.user?.role === "employee") {
+        next({ name: "projects" });
+        return;
+      }
     }
 
     // Trial abgelaufen → Upgrade (außer wenn schon auf Upgrade-Seite)

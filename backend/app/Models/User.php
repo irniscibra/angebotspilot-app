@@ -44,6 +44,11 @@ class User extends Authenticatable implements MustVerifyEmail
         return $this->hasMany(Quote::class, 'created_by');
     }
 
+    public function assignedProjects()
+    {
+        return $this->belongsToMany(Project::class, 'project_assignments')->withTimestamps();
+    }
+
     // ---- Email Verification ----
 
     /**
@@ -73,5 +78,25 @@ class User extends Authenticatable implements MustVerifyEmail
     public function isAdmin(): bool
     {
         return in_array($this->role, ['owner', 'admin']);
+    }
+
+    public function isEmployee(): bool
+    {
+        return $this->role === 'employee';
+    }
+
+    /**
+     * Darf dieser User auf dieses Projekt zugreifen? Owner/Admin: immer
+     * (Firmenzugehoerigkeit wird zusaetzlich in
+     * AuthorizesProjectAccess::authorizeProjectAccess() geprueft).
+     * Mitarbeiter: nur wenn explizit ueber project_assignments zugewiesen.
+     */
+    public function canAccessProject(Project $project): bool
+    {
+        if ($this->isAdmin()) {
+            return true;
+        }
+
+        return $this->assignedProjects()->whereKey($project->id)->exists();
     }
 }
