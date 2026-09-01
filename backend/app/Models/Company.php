@@ -105,6 +105,11 @@ class Company extends Model
         return $this->hasMany(Customer::class);
     }
 
+    public function projects()
+    {
+        return $this->hasMany(Project::class);
+    }
+
     public function materials()
     {
         return $this->hasMany(Material::class);

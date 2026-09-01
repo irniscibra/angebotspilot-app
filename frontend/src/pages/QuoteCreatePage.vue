@@ -342,6 +342,24 @@
                   ></template
                 >
               </q-select>
+              <q-select
+                v-model="selectedProject"
+                filled
+                label="Projekt (optional)"
+                :options="projectOptions"
+                option-value="value"
+                option-label="label"
+                emit-value
+                map-options
+                clearable
+                class="q-mb-md"
+                use-input
+                @filter="filterProjects"
+              >
+                <template v-slot:prepend
+                  ><q-icon name="folder" color="grey-5"
+                /></template>
+              </q-select>
               <q-btn
                 type="submit"
                 color="primary"
@@ -410,6 +428,25 @@
                   ><q-icon name="location_on" color="grey-5"
                 /></template>
               </q-input>
+              <q-select
+                v-model="selectedProject"
+                filled
+                dense
+                label="Projekt (optional)"
+                :options="projectOptions"
+                option-value="value"
+                option-label="label"
+                emit-value
+                map-options
+                clearable
+                class="col"
+                use-input
+                @filter="filterProjects"
+              >
+                <template v-slot:prepend
+                  ><q-icon name="folder" color="grey-5"
+                /></template>
+              </q-select>
             </div>
             <div v-if="templatesLoading" class="flex flex-center q-pa-lg">
               <q-spinner color="teal" size="30px" />
@@ -536,6 +573,24 @@
                   ><q-icon name="location_on" color="grey-5"
                 /></template>
               </q-input>
+              <q-select
+                v-model="selectedProject"
+                filled
+                label="Projekt (optional)"
+                :options="projectOptions"
+                option-value="value"
+                option-label="label"
+                emit-value
+                map-options
+                clearable
+                class="col"
+                use-input
+                @filter="filterProjects"
+              >
+                <template v-slot:prepend
+                  ><q-icon name="folder" color="grey-5"
+                /></template>
+              </q-select>
             </div>
             <q-btn
               color="indigo"
@@ -776,6 +831,25 @@
                     ><q-icon name="location_on" color="grey-5"
                   /></template>
                 </q-input>
+                <q-select
+                  v-model="selectedProject"
+                  filled
+                  dense
+                  label="Projekt (optional)"
+                  :options="projectOptions"
+                  option-value="value"
+                  option-label="label"
+                  emit-value
+                  map-options
+                  clearable
+                  class="col"
+                  use-input
+                  @filter="filterProjects"
+                >
+                  <template v-slot:prepend
+                    ><q-icon name="folder" color="grey-5"
+                  /></template>
+                </q-select>
               </div>
 
               <!-- Upload Zone -->
@@ -1109,6 +1183,25 @@
                     ><q-icon name="location_on" color="grey-5"
                   /></template>
                 </q-input>
+                <q-select
+                  v-model="selectedProject"
+                  filled
+                  dense
+                  label="Projekt (optional)"
+                  :options="projectOptions"
+                  option-value="value"
+                  option-label="label"
+                  emit-value
+                  map-options
+                  clearable
+                  class="col"
+                  use-input
+                  @filter="filterProjects"
+                >
+                  <template v-slot:prepend
+                    ><q-icon name="folder" color="grey-5"
+                  /></template>
+                </q-select>
               </div>
 
               <div
@@ -1500,7 +1593,7 @@
 
 <script>
 import { ref, computed, onMounted, onUnmounted } from "vue";
-import { useRouter } from "vue-router";
+import { useRouter, useRoute } from "vue-router";
 import { useQuoteStore } from "src/stores/quotes";
 import { useQuasar } from "quasar";
 import { api } from "src/boot/axios";
@@ -1510,6 +1603,7 @@ export default {
   name: "QuoteCreatePage",
   setup() {
     const router = useRouter();
+    const route = useRoute();
     const quoteStore = useQuoteStore();
     const $q = useQuasar();
 
@@ -1523,6 +1617,9 @@ export default {
     const selectedCustomer = ref(null);
     const allCustomers = ref([]);
     const customerOptions = ref([]);
+    const selectedProject = ref(null);
+    const allProjects = ref([]);
+    const projectOptions = ref([]);
     const quoteCreated = ref(false);
 
     // AI state
@@ -1630,9 +1727,72 @@ export default {
       }
     };
 
+    // ---- Projekte (optionale Zuordnung) ----
+    const loadProjects = async () => {
+      try {
+        const r = await api.get("/projects", { params: { per_page: 50 } });
+        allProjects.value = r.data.data || r.data;
+        projectOptions.value = allProjects.value.map((p) => ({
+          label: p.title,
+          value: p.id,
+        }));
+      } catch (e) {
+        console.error(e);
+      }
+    };
+
+    const filterProjects = (val, update) => {
+      update(() => {
+        const list = allProjects.value.map((p) => ({
+          label: p.title,
+          value: p.id,
+        }));
+        if (!val) {
+          projectOptions.value = list;
+        } else {
+          const s = val.toLowerCase();
+          projectOptions.value = list.filter((p) =>
+            p.label.toLowerCase().includes(s),
+          );
+        }
+      });
+    };
+
+    // Wenn die Seite über "Neues Angebot für dieses Projekt" mit
+    // ?project_id=X aufgerufen wurde: Projekt (und dessen Kunde/Adresse,
+    // falls vorhanden) vorbefüllen.
+    const prefillFromProject = async () => {
+      const projectId = route.query.project_id;
+      if (!projectId) return;
+      try {
+        const r = await api.get(`/projects/${projectId}`);
+        const project = r.data;
+        selectedProject.value = project.id;
+        projectOptions.value = [
+          { label: project.title, value: project.id },
+          ...projectOptions.value,
+        ];
+        if (project.customer_id) {
+          selectedCustomer.value = project.customer_id;
+        }
+        if (project.project_address) {
+          address.value = project.project_address;
+        }
+      } catch (e) {
+        console.error(e);
+      }
+    };
+
+    // Promise der Projekt-Vorbefüllung merken, damit jeder Absende-Handler
+    // (auch bei sehr schnellem Klick, z.B. Beispiel + sofort "Generieren")
+    // sie zuverlässig abwarten kann, bevor das Angebot abgeschickt wird.
+    let prefillPromise = Promise.resolve();
+
     onMounted(() => {
       loadCustomers();
       loadTemplates();
+      loadProjects();
+      prefillPromise = prefillFromProject();
     });
 
     onUnmounted(() => {
@@ -1695,6 +1855,7 @@ export default {
 
     // === KI generieren ===
     const onGenerate = async () => {
+      await prefillPromise;
       generating.value = true;
       progress.value = 0;
       currentStep.value = 0;
@@ -1712,6 +1873,7 @@ export default {
           description: description.value,
           address: address.value,
           customer_id: selectedCustomer.value,
+          project_id: selectedProject.value,
         });
         aiNotes.value = r.ai_notes || "";
         progress.value = 1;
@@ -1755,10 +1917,12 @@ export default {
     };
     // === Aus Vorlage erstellen ===
     const onCreateFromTemplate = async (tpl) => {
+      await prefillPromise;
       try {
         const res = await api.post("/quotes", {
           project_description: tpl.name,
           customer_id: selectedCustomer.value || null,
+          project_id: selectedProject.value || null,
           project_address: address.value || null,
           use_ai: false,
         });
@@ -1783,6 +1947,7 @@ export default {
 
     // === Leeres Angebot ===
     const onCreateEmpty = async () => {
+      await prefillPromise;
       if (!emptyTitle.value) {
         $q.notify({ type: "warning", message: "Bitte Projekttitel eingeben" });
         return;
@@ -1791,6 +1956,7 @@ export default {
         const res = await api.post("/quotes", {
           project_description: emptyTitle.value,
           customer_id: selectedCustomer.value || null,
+          project_id: selectedProject.value || null,
           project_address: address.value || null,
           use_ai: false,
         });
@@ -1935,12 +2101,14 @@ export default {
 
     const onImportPdf = async () => {
       if (!pdfFile.value) return;
+      await prefillPromise;
       importingPdf.value = true;
 
       try {
         // Schritt 1: Quote ID holen (sofort, kein Timeout möglich)
         const prepareRes = await api.post("/quotes/scan-prepare", {
           customer_id: selectedCustomer.value || undefined,
+          project_id: selectedProject.value || undefined,
           project_address: address.value || undefined,
         });
 
@@ -2084,11 +2252,13 @@ export default {
 
     const onImportLv = async () => {
       if (!lvFile.value) return;
+      await prefillPromise;
       importingLv.value = true;
 
       try {
         const prepareRes = await api.post("/lv-import/prepare", {
           customer_id: selectedCustomer.value || undefined,
+          project_id: selectedProject.value || undefined,
           project_address: address.value || undefined,
         });
 
@@ -2126,6 +2296,9 @@ export default {
       address,
       selectedCustomer,
       customerOptions,
+      selectedProject,
+      projectOptions,
+      filterProjects,
       quoteCreated,
       generating,
       progress,

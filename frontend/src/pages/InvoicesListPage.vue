@@ -244,6 +244,25 @@
               class="q-mb-md"
               placeholder="z.B. Wartungsarbeiten März 2026"
             />
+            <q-select
+              v-model="selectedProject"
+              filled
+              dense
+              label="Projekt (optional)"
+              :options="projectOptions"
+              option-value="value"
+              option-label="label"
+              emit-value
+              map-options
+              clearable
+              use-input
+              class="q-mb-md"
+              @filter="filterProjects"
+            >
+              <template v-slot:prepend
+                ><q-icon name="folder" color="grey-5"
+              /></template>
+            </q-select>
             <q-btn
               color="primary"
               icon="add"
@@ -309,6 +328,39 @@ export default {
 
     // Leere Rechnung
     const emptyTitle = ref("");
+    const selectedProject = ref(null);
+    const allProjects = ref([]);
+    const projectOptions = ref([]);
+
+    const loadProjects = async () => {
+      try {
+        const r = await api.get("/projects", { params: { per_page: 50 } });
+        allProjects.value = r.data.data || r.data;
+        projectOptions.value = allProjects.value.map((p) => ({
+          label: p.title,
+          value: p.id,
+        }));
+      } catch (e) {
+        console.error(e);
+      }
+    };
+
+    const filterProjects = (val, update) => {
+      update(() => {
+        const list = allProjects.value.map((p) => ({
+          label: p.title,
+          value: p.id,
+        }));
+        if (!val) {
+          projectOptions.value = list;
+        } else {
+          const s = val.toLowerCase();
+          projectOptions.value = list.filter((p) =>
+            p.label.toLowerCase().includes(s),
+          );
+        }
+      });
+    };
 
     const statusFilterOptions = [
       { label: "Alle", value: "all" },
@@ -387,9 +439,11 @@ async function downloadDatev() {
     watch(showCreateDialog, (val) => {
       if (val) {
         loadQuotes();
+        loadProjects();
         selectedQuote.value = null;
         invoiceType.value = "standard";
         emptyTitle.value = "";
+        selectedProject.value = null;
       }
     });
 
@@ -433,6 +487,7 @@ async function downloadDatev() {
       try {
         const res = await api.post("/invoices", {
           project_title: emptyTitle.value,
+          project_id: selectedProject.value || null,
         });
         showCreateDialog.value = false;
         $q.notify({ type: "positive", message: "Rechnung erstellt!" });
@@ -489,6 +544,9 @@ async function downloadDatev() {
       invoiceType,
       typeOptions,
       emptyTitle,
+      selectedProject,
+      projectOptions,
+      filterProjects,
       onCreateFromQuote,
       onCreateEmpty,
       loadInvoices,

@@ -60,6 +60,7 @@ export const useQuoteStore = defineStore('quotes', {
         const response = await api.post('/quotes', {
           project_description: data.description,
           customer_id: data.customer_id || null,
+          project_id: data.project_id || null,
           project_address: data.address || null,
           use_ai: true,
         })

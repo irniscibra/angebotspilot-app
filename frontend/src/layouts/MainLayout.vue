@@ -158,6 +158,7 @@ export default {
     const menuItems = [
       { label: "Dashboard", icon: "dashboard", to: "/dashboard" },
       { label: "Neues Angebot", icon: "add_circle", to: "/quotes/create" },
+      { label: "Projekte", icon: "folder", to: "/projects" },
       { label: "Angebote", icon: "description", to: "/quotes" },
       { label: "Rechnungen", icon: "receipt_long", to: "/invoices" },
       { label: "Protokolle", icon: "assignment_turned_in", to: "/protokolle" },

@@ -14,6 +14,7 @@ class Quote extends Model
         'uuid',
         'company_id',
         'customer_id',
+        'project_id',
         'created_by',
         'quote_number',
         'project_title',
@@ -82,6 +83,11 @@ class Quote extends Model
     public function customer()
     {
         return $this->belongsTo(Customer::class);
+    }
+
+    public function project()
+    {
+        return $this->belongsTo(Project::class);
     }
 
     public function creator()

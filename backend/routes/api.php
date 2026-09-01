@@ -3,6 +3,10 @@
 use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\QuoteController;
 use App\Http\Controllers\Api\CustomerController;
+use App\Http\Controllers\Api\ProjectController;
+use App\Http\Controllers\Api\ProjectExpenseController;
+use App\Http\Controllers\Api\ProjectPhotoController;
+use App\Http\Controllers\Api\ProjectReportController;
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\Api\CompanyController;
 use App\Http\Controllers\Api\MaterialController;
@@ -106,6 +110,28 @@ Route::get('/email-verify/{id}/{hash}', [EmailVerificationController::class, 've
 
     // Kunden
     Route::apiResource('customers', CustomerController::class);
+
+    // Projekte (digitale Bauakte / Projektmappe)
+    Route::apiResource('projects', ProjectController::class);
+
+    // Projekt-Ausgaben (Phase 3)
+    Route::get('projects/{project}/expenses', [ProjectExpenseController::class, 'index']);
+    Route::post('projects/{project}/expenses', [ProjectExpenseController::class, 'store']);
+    Route::put('projects/{project}/expenses/{expense}', [ProjectExpenseController::class, 'update']);
+    Route::delete('projects/{project}/expenses/{expense}', [ProjectExpenseController::class, 'destroy']);
+
+    // Projekt-Fotos (Baustellendokumentation)
+    Route::get('projects/{project}/photos', [ProjectPhotoController::class, 'index']);
+    Route::post('projects/{project}/photos', [ProjectPhotoController::class, 'store']);
+    Route::put('projects/{project}/photos/{photo}', [ProjectPhotoController::class, 'update']);
+    Route::delete('projects/{project}/photos/{photo}', [ProjectPhotoController::class, 'destroy']);
+
+    // Projekt-Bautagesberichte
+    Route::get('projects/{project}/reports', [ProjectReportController::class, 'index']);
+    Route::post('projects/{project}/reports', [ProjectReportController::class, 'store']);
+    Route::post('projects/{project}/reports/ai-draft', [ProjectReportController::class, 'generateDraft']);
+    Route::put('projects/{project}/reports/{report}', [ProjectReportController::class, 'update']);
+    Route::delete('projects/{project}/reports/{report}', [ProjectReportController::class, 'destroy']);
 
     // Firma
     Route::get('company', [CompanyController::class, 'show']);

@@ -94,6 +94,7 @@ class InvoiceController extends Controller
         $invoice = Invoice::create([
             'company_id' => $company->id,
             'customer_id' => $quote->customer_id,
+            'project_id' => $quote->project_id,
             'quote_id' => $quote->id,
             'created_by' => $request->user()->id,
             'invoice_number' => $invoiceNumber,
@@ -156,6 +157,7 @@ class InvoiceController extends Controller
         $request->validate([
             'project_title' => 'required|string|max:255',
             'customer_id' => 'nullable|exists:customers,id',
+            'project_id' => 'nullable|exists:projects,id',
         ]);
 
         $company = $request->user()->company;
@@ -164,6 +166,7 @@ class InvoiceController extends Controller
         $invoice = Invoice::create([
             'company_id' => $company->id,
             'customer_id' => $request->customer_id,
+            'project_id' => $request->project_id,
             'created_by' => $request->user()->id,
             'invoice_number' => $invoiceNumber,
             'type' => 'standard',
@@ -194,6 +197,7 @@ class InvoiceController extends Controller
             'project_title' => 'sometimes|string|max:255',
             'project_address' => 'nullable|string|max:500',
             'customer_id' => 'nullable|exists:customers,id',
+            'project_id' => 'nullable|exists:projects,id',
             'service_date_from' => 'nullable|date',
             'service_date_to' => 'nullable|date',
             'due_date' => 'nullable|date',
@@ -205,7 +209,7 @@ class InvoiceController extends Controller
         ]);
 
         $invoice->update($request->only([
-            'project_title', 'project_address', 'customer_id',
+            'project_title', 'project_address', 'customer_id', 'project_id',
             'service_date_from', 'service_date_to', 'due_date',
             'discount_percent', 'header_text', 'footer_text',
             'terms_text', 'internal_notes',

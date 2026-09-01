@@ -100,6 +100,7 @@ export default {
     ];
 
     const moreItems = [
+      { label: "Projekte", icon: "folder", to: "/projects" },
       { label: "Materialkatalog", icon: "inventory_2", to: "/materials" },
       { label: "Datanorm Import", icon: "upload_file", to: "/datanorm" },
       { label: "Rechnungen", icon: "receipt_long", to: "/invoices" },

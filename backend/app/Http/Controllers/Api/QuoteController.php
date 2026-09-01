@@ -74,6 +74,7 @@ class QuoteController extends Controller
         ? 'required|string|min:10|max:5000'
         : 'required|string|max:5000',
     'customer_id' => 'nullable|exists:customers,id',
+    'project_id' => 'nullable|exists:projects,id',
     'project_address' => 'nullable|string|max:500',
     'use_ai' => 'boolean',
 ]);
@@ -92,6 +93,7 @@ class QuoteController extends Controller
         $quote = Quote::create([
             'company_id' => $company->id,
             'customer_id' => $request->customer_id,
+            'project_id' => $request->project_id,
             'created_by' => $request->user()->id,
             'quote_number' => $company->generateQuoteNumber(),
             'project_title' => 'Neues Angebot',
@@ -140,6 +142,7 @@ class QuoteController extends Controller
             'project_description' => 'sometimes|string|max:5000',
             'project_address' => 'nullable|string|max:500',
             'customer_id' => 'nullable|exists:customers,id',
+            'project_id' => 'nullable|exists:projects,id',
             'discount_percent' => 'sometimes|numeric|min:0|max:100',
             'header_text' => 'nullable|string',
             'footer_text' => 'nullable|string',
@@ -152,6 +155,7 @@ class QuoteController extends Controller
             'project_description',
             'project_address',
             'customer_id',
+            'project_id',
             'discount_percent',
             'header_text',
             'footer_text',

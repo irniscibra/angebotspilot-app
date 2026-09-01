@@ -352,6 +352,7 @@ public function scanPrepare(Request $request): JsonResponse
 {
     $request->validate([
         'customer_id'     => 'nullable|exists:customers,id',
+        'project_id'      => 'nullable|exists:projects,id',
         'project_address' => 'nullable|string|max:500',
     ]);
 
@@ -360,6 +361,7 @@ public function scanPrepare(Request $request): JsonResponse
     $quote = Quote::create([
         'company_id'          => $company->id,
         'customer_id'         => $request->customer_id,
+        'project_id'          => $request->project_id,
         'created_by'          => $request->user()->id,
         'quote_number'        => $company->generateQuoteNumber(),
         'project_title'       => 'Scan wird verarbeitet...',

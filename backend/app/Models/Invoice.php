@@ -14,6 +14,7 @@ class Invoice extends Model
         'uuid',
         'company_id',
         'customer_id',
+        'project_id',
         'quote_id',
         'created_by',
         'invoice_number',
@@ -88,6 +89,11 @@ class Invoice extends Model
     public function customer()
     {
         return $this->belongsTo(Customer::class);
+    }
+
+    public function project()
+    {
+        return $this->belongsTo(Project::class);
     }
 
     public function quote()

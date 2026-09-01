@@ -56,6 +56,16 @@ const routes = [
         component: () => import("pages/QuotesListPage.vue"),
       },
       {
+        path: "projects",
+        name: "projects",
+        component: () => import("pages/ProjectsListPage.vue"),
+      },
+      {
+        path: "projects/:id",
+        name: "project-detail",
+        component: () => import("pages/ProjectDetailPage.vue"),
+      },
+      {
         path: "quotes/create",
         name: "quotes-create",
         component: () => import("pages/QuoteCreatePage.vue"),
