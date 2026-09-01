@@ -47,6 +47,13 @@
             </q-item>
             <q-separator />
             </template>
+            <q-item clickable v-close-popup @click="openTimeEntryDialog()">
+              <q-item-section avatar
+                ><q-icon name="schedule" size="20px" color="#4f46e5"
+              /></q-item-section>
+              <q-item-section>Zeit erfassen</q-item-section>
+            </q-item>
+            <q-separator />
             <q-item clickable v-close-popup @click="$refs.photoInput.click()">
               <q-item-section avatar
                 ><q-icon name="add_a_photo" size="20px" color="#4f46e5"
@@ -514,6 +521,222 @@
         </q-dialog>
       </template>
 
+      <!-- Zeiterfassung -->
+      <div class="row items-center q-mt-lg q-mb-sm">
+        <div class="ap-section-title">
+          <q-icon name="schedule" size="18px" color="#64748b" class="q-mr-xs" />
+          Zeiterfassung
+          <span class="ap-section-count">{{ project.time_entries?.length || 0 }}</span>
+        </div>
+        <q-space />
+        <div v-if="project.time_entries?.length" style="font-size: 12px; color: #64748b; text-align: right; line-height: 1.4">
+          <div style="font-weight: 700; color: #0f172a; font-size: 13.5px">{{ formatDuration(timeEntrySummary.total) }} gesamt</div>
+          <div>{{ formatDuration(timeEntrySummary.week) }} diese Woche</div>
+        </div>
+      </div>
+
+      <div
+        v-if="isAdmin && timeEntrySummary.employees.length > 1"
+        class="row q-gutter-xs q-mb-sm"
+      >
+        <div
+          v-for="emp in timeEntrySummary.employees"
+          :key="emp.name"
+          style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 999px; padding: 3px 10px; font-size: 12px; color: #475569"
+        >
+          {{ emp.name }}: <strong style="color: #0f172a">{{ formatDuration(emp.minutes) }}</strong>
+        </div>
+      </div>
+
+      <div v-if="!project.time_entries || project.time_entries.length === 0" class="ap-empty-card">
+        <q-icon name="schedule" size="28px" color="#c6cad9" />
+        <div class="ap-empty-text">Noch keine Zeiten für dieses Projekt erfasst</div>
+      </div>
+      <div v-else class="ap-list-card">
+        <div
+          v-for="entry in project.time_entries"
+          :key="'te' + entry.id"
+          class="ap-list-row"
+          @click="canModifyEntry(entry) ? openTimeEntryDialog(entry) : null"
+          :style="{ cursor: canModifyEntry(entry) ? 'pointer' : 'default' }"
+        >
+          <div class="ap-list-avatar" style="background: #eef2ff; color: #4f46e5">
+            <q-icon name="schedule" size="16px" />
+          </div>
+          <div class="ap-list-main">
+            <div class="ap-list-title">
+              {{ formatDate(entry.entry_date) }} · {{ entry.start_time?.slice(0, 5) }}–{{ entry.end_time?.slice(0, 5) }}
+              <span v-if="isAdmin && entry.user" style="color: #94a3b8; font-weight: 500">
+                · {{ entry.user.name }}
+              </span>
+            </div>
+            <div class="ap-list-sub">
+              <template v-if="entry.break_minutes">{{ entry.break_minutes }} Min. Pause</template>
+              <template v-if="entry.break_minutes && entry.description">· </template>
+              <template v-if="entry.description">{{ entry.description }}</template>
+            </div>
+          </div>
+          <div class="ap-list-right">
+            <div class="ap-list-amount">{{ formatDuration(entry.duration_minutes) }}</div>
+          </div>
+          <q-btn
+            v-if="canModifyEntry(entry)"
+            flat
+            round
+            dense
+            size="sm"
+            icon="more_vert"
+            color="grey-5"
+            class="q-ml-sm"
+            @click.stop
+          >
+            <q-menu auto-close style="border-radius: 12px">
+              <q-list style="min-width: 150px">
+                <q-item clickable @click="openTimeEntryDialog(entry)">
+                  <q-item-section avatar
+                    ><q-icon name="edit" size="18px" color="grey-7"
+                  /></q-item-section>
+                  <q-item-section>Bearbeiten</q-item-section>
+                </q-item>
+                <q-separator />
+                <q-item clickable class="text-negative" @click="onDeleteTimeEntry(entry)">
+                  <q-item-section avatar
+                    ><q-icon name="delete" size="18px" color="negative"
+                  /></q-item-section>
+                  <q-item-section>Löschen</q-item-section>
+                </q-item>
+              </q-list>
+            </q-menu>
+          </q-btn>
+        </div>
+      </div>
+
+      <!-- Drawer: Zeit erfassen/bearbeiten -->
+      <q-dialog v-model="timeEntryDialog.show" position="right" full-height maximized-on-mobile persistent>
+        <q-card style="width: 440px; max-width: 95vw; display: flex; flex-direction: column">
+          <q-card-section class="row items-center q-pb-sm" style="border-bottom: 1px solid #f1f5f9; flex-shrink: 0">
+            <h6 class="q-my-none" style="font-weight: 600; color: #0f172a">
+              {{ timeEntryDialog.id ? "Zeit bearbeiten" : "Zeit erfassen" }}
+            </h6>
+            <q-space />
+            <q-btn flat round dense icon="close" color="grey-5" v-close-popup />
+          </q-card-section>
+          <q-card-section class="q-gutter-md" style="flex: 1; overflow-y: auto">
+            <div v-if="isAdmin && timeEntryTargetOptions.length > 1">
+              <div class="ap-field-label">
+                <q-icon name="person" size="16px" color="grey-5" class="q-mr-xs" />Für wen?
+              </div>
+              <div class="ap-input-box">
+                <q-select
+                  v-model="timeEntryDialog.user_id"
+                  borderless
+                  dense
+                  :options="timeEntryTargetOptions"
+                  option-value="id"
+                  option-label="name"
+                  emit-value
+                  map-options
+                  :disable="!!timeEntryDialog.id"
+                />
+              </div>
+            </div>
+            <div>
+              <div class="ap-field-label">
+                <q-icon name="event" size="16px" color="grey-5" class="q-mr-xs" />Datum *
+              </div>
+              <div class="ap-input-box">
+                <q-input v-model="timeEntryDialog.entry_date" borderless dense type="date" autofocus />
+              </div>
+            </div>
+            <div class="row q-col-gutter-sm">
+              <div class="col-6">
+                <div class="ap-field-label">
+                  <q-icon name="schedule" size="16px" color="grey-5" class="q-mr-xs" />Start *
+                </div>
+                <div class="ap-input-box">
+                  <q-input
+                    v-model="timeEntryDialog.start_time"
+                    borderless
+                    dense
+                    mask="##:##"
+                    fill-mask="0"
+                    placeholder="08:00"
+                    inputmode="numeric"
+                  />
+                </div>
+              </div>
+              <div class="col-6">
+                <div class="ap-field-label">
+                  <q-icon name="schedule" size="16px" color="grey-5" class="q-mr-xs" />Ende *
+                </div>
+                <div class="ap-input-box">
+                  <q-input
+                    v-model="timeEntryDialog.end_time"
+                    borderless
+                    dense
+                    mask="##:##"
+                    fill-mask="0"
+                    placeholder="17:00"
+                    inputmode="numeric"
+                  />
+                </div>
+              </div>
+            </div>
+            <div>
+              <div class="ap-field-label">
+                <q-icon name="free_breakfast" size="16px" color="grey-5" class="q-mr-xs" />Pause (Minuten)
+              </div>
+              <div class="ap-input-box">
+                <q-input
+                  v-model.number="timeEntryDialog.break_minutes"
+                  borderless
+                  dense
+                  type="number"
+                  min="0"
+                  placeholder="0"
+                />
+              </div>
+            </div>
+            <div>
+              <div class="ap-field-label">
+                <q-icon name="notes" size="16px" color="grey-5" class="q-mr-xs" />Notiz (optional)
+              </div>
+              <div class="ap-input-box">
+                <q-input
+                  v-model="timeEntryDialog.description"
+                  borderless
+                  dense
+                  type="textarea"
+                  rows="2"
+                  placeholder="z. B. Fliesen verlegt Bad OG"
+                />
+              </div>
+            </div>
+          </q-card-section>
+          <q-card-actions align="right" class="q-pa-md" style="border-top: 1px solid #f1f5f9; flex-shrink: 0">
+            <q-btn
+              v-if="timeEntryDialog.id"
+              flat
+              no-caps
+              label="Löschen"
+              color="negative"
+              class="q-mr-auto"
+              @click="onDeleteTimeEntry({ id: timeEntryDialog.id })"
+            />
+            <q-btn flat no-caps label="Abbrechen" color="grey" v-close-popup />
+            <q-btn
+              label="Speichern"
+              no-caps
+              unelevated
+              icon="save"
+              :loading="timeEntryDialog.saving"
+              @click="onSaveTimeEntry"
+              style="background: #4f46e5; color: #ffffff"
+            />
+          </q-card-actions>
+        </q-card>
+      </q-dialog>
+
       <!-- Fotos -->
       <div class="row items-center q-mt-lg q-mb-sm">
         <div class="ap-section-title">
@@ -861,7 +1084,7 @@
   </q-page>
 </template>
 <script>
-import { computed, onMounted, reactive, ref, watch } from "vue";
+import { computed, nextTick, onMounted, reactive, ref, watch } from "vue";
 import { useRoute } from "vue-router";
 import { useProjectStore } from "src/stores/projects";
 import { useAuthStore } from "src/stores/auth";
@@ -947,6 +1170,165 @@ export default {
           message: e.response?.data?.message || "Konnte nicht entfernt werden",
         });
       }
+    };
+
+    // ---- Zeiterfassung ----
+    // Jeder darf eigene Zeiten erfassen, Admin/Owner zusaetzlich fuer
+    // Kollegen ("Fuer wen?"-Auswahl). Bearbeiten/Loeschen nur beim eigenen,
+    // selbst erfassten Eintrag oder immer fuer Admin/Owner - deckt sich mit
+    // der Backend-Regel in TimeEntryController::canModify().
+    const formatDuration = (minutes) => {
+      const total = Math.max(0, Number(minutes) || 0);
+      const h = Math.floor(total / 60);
+      const m = total % 60;
+      return `${h}:${String(m).padStart(2, "0")} h`;
+    };
+
+    // entry_date kommt vom Backend als reines Datum ("YYYY-MM-DD..."), aber
+    // durch den Laravel-Date-Cast mit angehaengter "T00:00:00.000000Z"-Zeit.
+    // new Date(entry_date) wuerde das als UTC-Mitternacht interpretieren und
+    // je nach Zeitzone des Browsers auf den Vortag zurueckfallen - deshalb
+    // hier bewusst nur den Datumsteil nehmen und als lokales Datum bauen.
+    const parseLocalDate = (dateStr) => {
+      const [y, m, d] = String(dateStr).substring(0, 10).split("-").map(Number);
+      return new Date(y, m - 1, d);
+    };
+
+    const isInCurrentWeek = (dateStr) => {
+      const d = parseLocalDate(dateStr);
+      const now = new Date();
+      const isoDay = now.getDay() || 7; // Montag=1 ... Sonntag=7
+      const monday = new Date(now.getFullYear(), now.getMonth(), now.getDate() - isoDay + 1);
+      const sunday = new Date(monday.getFullYear(), monday.getMonth(), monday.getDate() + 6);
+      return d >= monday && d <= sunday;
+    };
+
+    const timeEntrySummary = computed(() => {
+      const entries = project.value?.time_entries || [];
+      let total = 0;
+      let week = 0;
+      const byEmployee = {};
+      entries.forEach((entry) => {
+        const minutes = Number(entry.duration_minutes) || 0;
+        total += minutes;
+        if (isInCurrentWeek(entry.entry_date)) week += minutes;
+        const name = entry.user?.name || "Unbekannt";
+        byEmployee[name] = (byEmployee[name] || 0) + minutes;
+      });
+      const employees = Object.entries(byEmployee)
+        .map(([name, minutes]) => ({ name, minutes }))
+        .sort((a, b) => b.minutes - a.minutes);
+      return { total, week, employees };
+    });
+
+    const canModifyEntry = (entry) => {
+      if (isAdmin.value) return true;
+      const myId = authStore.user?.id;
+      return entry.user?.id === myId && entry.logged_by?.id === myId;
+    };
+
+    const timeEntryTargetOptions = computed(() => {
+      if (!authStore.user) return [];
+      const self = { id: authStore.user.id, name: `${authStore.user.name} (ich)` };
+      const others = teamMembers.value.filter(
+        (m) =>
+          m.id !== authStore.user.id &&
+          (m.role !== "employee" || assignedUsers.value.some((a) => a.id === m.id))
+      );
+      return [self, ...others];
+    });
+
+    const emptyTimeEntryDialog = () => ({
+      show: false,
+      id: null,
+      user_id: authStore.user?.id || null,
+      entry_date: "",
+      start_time: "",
+      end_time: "",
+      break_minutes: 0,
+      description: "",
+      saving: false,
+    });
+    const timeEntryDialog = reactive(emptyTimeEntryDialog());
+
+    const openTimeEntryDialog = (entry = null) => {
+      Object.assign(timeEntryDialog, emptyTimeEntryDialog());
+      if (entry) {
+        timeEntryDialog.id = entry.id;
+        timeEntryDialog.user_id = entry.user?.id || authStore.user?.id;
+        timeEntryDialog.entry_date = entry.entry_date
+          ? String(entry.entry_date).substring(0, 10)
+          : "";
+        timeEntryDialog.start_time = entry.start_time?.slice(0, 5) || "";
+        timeEntryDialog.end_time = entry.end_time?.slice(0, 5) || "";
+        timeEntryDialog.break_minutes = entry.break_minutes || 0;
+        timeEntryDialog.description = entry.description || "";
+      } else {
+        timeEntryDialog.entry_date = new Date().toISOString().substring(0, 10);
+      }
+      timeEntryDialog.show = true;
+    };
+
+    const onSaveTimeEntry = async () => {
+      // Native <input type="date"/"time"> Felder committen ihren Wert teils erst
+      // beim "change"-Event (Blur). Ein Klick auf "Speichern" kann sonst mit
+      // noch nicht synchronisierten Werten ankommen. Aktives Element daher
+      // explizit blur()en und einen Tick warten, bevor validiert wird.
+      document.activeElement?.blur?.();
+      await nextTick();
+      if (!timeEntryDialog.entry_date || !timeEntryDialog.start_time || !timeEntryDialog.end_time) {
+        $q.notify({ type: "warning", message: "Datum, Start und Ende sind Pflichtfelder" });
+        return;
+      }
+      timeEntryDialog.saving = true;
+      const payload = {
+        entry_date: timeEntryDialog.entry_date,
+        start_time: timeEntryDialog.start_time,
+        end_time: timeEntryDialog.end_time,
+        break_minutes: timeEntryDialog.break_minutes || 0,
+        description: timeEntryDialog.description || null,
+      };
+      if (!timeEntryDialog.id) {
+        payload.user_id = timeEntryDialog.user_id;
+      }
+      try {
+        if (timeEntryDialog.id) {
+          await api.put(`/projects/${route.params.id}/time-entries/${timeEntryDialog.id}`, payload);
+        } else {
+          await api.post(`/projects/${route.params.id}/time-entries`, payload);
+        }
+        timeEntryDialog.show = false;
+        $q.notify({ type: "positive", message: "Zeit erfasst" });
+        await loadProject();
+      } catch (e) {
+        $q.notify({
+          type: "negative",
+          message: e.response?.data?.message || "Fehler beim Speichern",
+        });
+      } finally {
+        timeEntryDialog.saving = false;
+      }
+    };
+
+    const onDeleteTimeEntry = (entry) => {
+      $q.dialog({
+        title: "Löschen?",
+        message: "Diesen Zeiteintrag wirklich löschen?",
+        cancel: true,
+        color: "negative",
+      }).onOk(async () => {
+        try {
+          await api.delete(`/projects/${route.params.id}/time-entries/${entry.id}`);
+          timeEntryDialog.show = false;
+          $q.notify({ type: "positive", message: "Zeiteintrag gelöscht" });
+          await loadProject();
+        } catch (e) {
+          $q.notify({
+            type: "negative",
+            message: e.response?.data?.message || "Fehler beim Löschen",
+          });
+        }
+      });
     };
 
     const loading = ref(true);
@@ -1584,6 +1966,14 @@ export default {
       openAssignDialog,
       onAssign,
       onUnassign,
+      formatDuration,
+      timeEntrySummary,
+      canModifyEntry,
+      timeEntryTargetOptions,
+      timeEntryDialog,
+      openTimeEntryDialog,
+      onSaveTimeEntry,
+      onDeleteTimeEntry,
     };
   },
 };

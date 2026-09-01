@@ -243,7 +243,7 @@ public function hasActiveSubscription(): bool
 
     public function activeEmployeeCount(): int
     {
-        return $this->users()->where('role', 'employee')->count();
+        return $this->users()->where('role', 'employee')->whereNull('deactivated_at')->count();
     }
 
     public function canAddEmployee(): bool

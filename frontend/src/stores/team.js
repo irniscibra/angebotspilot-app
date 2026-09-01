@@ -8,9 +8,30 @@ export const useTeamStore = defineStore("team", {
     loading: false,
     saving: false,
     error: null,
+    companyTimeEntries: { entries: [], byEmployee: [] },
+    timeEntriesLoading: false,
   }),
 
   actions: {
+    // Firmenweite Zeituebersicht ueber alle Projekte (fuer Lohnabrechnung).
+    // month im Format "YYYY-MM"; ohne Angabe liefert das Backend alle Zeiten.
+    async fetchCompanyTimeEntries(month) {
+      this.timeEntriesLoading = true;
+      try {
+        const response = await api.get("/time-entries", {
+          params: month ? { month } : {},
+        });
+        this.companyTimeEntries = {
+          entries: response.data.entries,
+          byEmployee: response.data.by_employee,
+        };
+      } catch (err) {
+        this.error = err.response?.data?.message || "Fehler beim Laden der Zeiten";
+      } finally {
+        this.timeEntriesLoading = false;
+      }
+    },
+
     async fetchTeam() {
       this.loading = true;
       this.error = null;

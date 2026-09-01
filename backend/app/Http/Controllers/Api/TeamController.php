@@ -23,6 +23,7 @@ class TeamController extends Controller
         $company = $request->user()->company;
 
         $members = $company->users()
+            ->whereNull('deactivated_at')
             ->orderByRaw("FIELD(role, 'owner', 'admin', 'employee')")
             ->orderBy('name')
             ->withCount('assignedProjects')
@@ -74,8 +75,12 @@ class TeamController extends Controller
             'email' => $request->input('email'),
             'password' => Hash::make(Str::random(40)),
             'role' => $request->input('role'),
-            'invited_at' => now(),
         ]);
+        // invited_at ist absichtlich NICHT in User::$fillable (Lifecycle-Feld,
+        // soll nicht per Mass-Assignment von irgendwo aus setzbar sein) -
+        // deshalb hier ueber forceFill() gesetzt, sonst wuerde Laravel das
+        // Feld beim ->create() oben still und ohne Fehler verwerfen.
+        $user->forceFill(['invited_at' => now()])->save();
 
         $user->notify(new EmployeeInviteNotification($company->name, $request->user()->name));
 
@@ -105,8 +110,21 @@ class TeamController extends Controller
             return response()->json(['message' => 'Sie koennen sich nicht selbst entfernen.'], 422);
         }
 
+        if ($user->deactivated_at) {
+            return response()->json(['message' => 'Dieses Team-Mitglied wurde bereits entfernt.'], 422);
+        }
+
+        // Kein Hard-Delete: der User-Datensatz bleibt bestehen, damit bereits
+        // erfasste Zeiten, Fotos und Bautagesberichte weiterhin korrekt
+        // seinem Namen zugeordnet bleiben (Nachvollziehbarkeit von Lohn-
+        // relevanten Daten). Stattdessen wird der Zugang entzogen: Tokens
+        // geloescht (sofortiger Logout aller aktiven Sitzungen), Login
+        // kuenftig blockiert (siehe AuthController::login), und der User
+        // erscheint nicht mehr in der Team-Liste oder bei neuen Zuweisungen.
+        // deactivated_at ist ebenfalls nicht in $fillable - forceFill() aus
+        // demselben Grund wie bei invited_at oben.
         $user->tokens()->delete();
-        $user->delete();
+        $user->forceFill(['deactivated_at' => now()])->save();
 
         return response()->json(['message' => 'Team-Mitglied entfernt.']);
     }

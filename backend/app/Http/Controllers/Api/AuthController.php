@@ -86,6 +86,14 @@ class AuthController extends Controller
             ], 403);
         }
 
+        // Team-Mitglied wurde entfernt (deaktiviert, siehe TeamController::destroy) -
+        // Zugang bleibt fuer immer gesperrt, auch wenn das Passwort noch bekannt ist.
+        if ($user->deactivated_at) {
+            return response()->json([
+                'message' => 'Ihr Zugang wurde deaktiviert. Bitte wenden Sie sich an Ihren Firmeninhaber.',
+            ], 403);
+        }
+
         // Alte Tokens löschen
         $user->tokens()->delete();
 

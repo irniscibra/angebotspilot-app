@@ -63,6 +63,11 @@ class Project extends Model
         return $this->hasMany(ProjectReport::class);
     }
 
+    public function timeEntries()
+    {
+        return $this->hasMany(TimeEntry::class);
+    }
+
     public function assignments()
     {
         return $this->hasMany(ProjectAssignment::class);

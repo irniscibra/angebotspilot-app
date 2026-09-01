@@ -27,6 +27,7 @@ use App\Http\Controllers\Api\StripeController;
 use App\Http\Controllers\Api\TeamController;
 use App\Http\Controllers\Api\InviteController;
 use App\Http\Controllers\Api\ProjectAssignmentController;
+use App\Http\Controllers\Api\TimeEntryController;
 
 
 /*
@@ -117,6 +118,13 @@ Route::get('/email-verify/{id}/{hash}', [EmailVerificationController::class, 've
     Route::post('projects/{project}/reports/ai-draft', [ProjectReportController::class, 'generateDraft']);
     Route::put('projects/{project}/reports/{report}', [ProjectReportController::class, 'update']);
 
+    // Zeiterfassung - jeder Zugewiesene erfasst eigene Zeiten, Admin/Owner
+    // zusaetzlich fuer Kollegen (Feinsteuerung im Controller, nicht hier)
+    Route::get('projects/{project}/time-entries', [TimeEntryController::class, 'index']);
+    Route::post('projects/{project}/time-entries', [TimeEntryController::class, 'store']);
+    Route::put('projects/{project}/time-entries/{entry}', [TimeEntryController::class, 'update']);
+    Route::delete('projects/{project}/time-entries/{entry}', [TimeEntryController::class, 'destroy']);
+
     // Feedback-Widget: für alle Rollen offen, keine geschäftskritischen Daten
     Route::post('feedback', [FeedbackController::class, 'store']);
 
@@ -177,6 +185,9 @@ Route::get('/email-verify/{id}/{hash}', [EmailVerificationController::class, 've
     Route::get('team', [TeamController::class, 'index']);
     Route::post('team/invite', [TeamController::class, 'invite']);
     Route::delete('team/{user}', [TeamController::class, 'destroy']);
+
+    // Firmenweite Zeituebersicht (alle Projekte, fuer Lohnabrechnung)
+    Route::get('time-entries', [TimeEntryController::class, 'companyIndex']);
 
     // Projekt-Fotos / -Berichte: Löschen bleibt Owner/Admin vorbehalten
     Route::delete('projects/{project}/photos/{photo}', [ProjectPhotoController::class, 'destroy']);

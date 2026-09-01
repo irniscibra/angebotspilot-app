@@ -95,6 +95,13 @@ class ProjectController extends Controller
             'customer',
             'photos' => fn ($q) => $q->orderBy('created_at', 'desc'),
             'reports' => fn ($q) => $q->orderBy('report_date', 'desc')->orderBy('created_at', 'desc'),
+            // Mitarbeiter sehen aus Datenschutzgruenden nur ihre eigenen
+            // Zeiten hier mit, Admin/Owner alle - siehe auch
+            // TimeEntryController::index() fuer dieselbe Regel.
+            'timeEntries' => fn ($q) => ($user->isAdmin() ? $q : $q->where('user_id', $user->id))
+                ->with(['user:id,name', 'loggedBy:id,name'])
+                ->orderBy('entry_date', 'desc')
+                ->orderBy('start_time', 'desc'),
         ];
 
         if ($user->isAdmin()) {

@@ -85,6 +85,80 @@
       </div>
     </div>
 
+    <div class="row items-center justify-between q-mt-xl q-mb-md">
+      <div class="ap-section-title">
+        <q-icon name="schedule" size="18px" color="#64748b" class="q-mr-xs" />
+        Zeiterfassung
+      </div>
+      <div class="row items-center q-gutter-xs">
+        <q-btn
+          flat
+          no-caps
+          dense
+          icon="download"
+          label="Export"
+          color="grey-7"
+          :disable="!team.companyTimeEntries.entries.length"
+          style="font-size: 12.5px; font-weight: 600"
+          @click="exportCsv"
+        />
+        <q-btn flat round dense icon="chevron_left" color="grey-6" @click="shiftMonth(-1)" />
+        <div style="font-size: 13.5px; font-weight: 600; color: #0f172a; min-width: 118px; text-align: center">
+          {{ monthLabel }}
+        </div>
+        <q-btn flat round dense icon="chevron_right" color="grey-6" @click="shiftMonth(1)" />
+      </div>
+    </div>
+
+    <div v-if="team.timeEntriesLoading" class="flex flex-center q-pa-lg">
+      <q-spinner-orbit color="primary" size="36px" />
+    </div>
+
+    <template v-else>
+      <div v-if="!team.companyTimeEntries.entries.length" class="ap-empty-card">
+        <q-icon name="schedule" size="26px" color="#c6cad9" />
+        <div class="ap-empty-text">Keine Zeiten in diesem Monat erfasst</div>
+      </div>
+      <template v-else>
+        <div class="ap-list-card q-mb-md">
+          <div
+            v-for="emp in team.companyTimeEntries.byEmployee"
+            :key="emp.user.id"
+            class="ap-list-row"
+            style="cursor: default"
+          >
+            <div class="ap-list-avatar" style="background: #eef2ff; color: #4f46e5">
+              {{ initials(emp.user.name) }}
+            </div>
+            <div class="ap-list-main">
+              <div class="ap-list-title">{{ emp.user.name }}</div>
+              <div class="ap-list-sub">{{ emp.entries_count }} Einträge</div>
+            </div>
+            <div class="ap-list-right">
+              <div class="ap-list-amount">{{ formatDuration(emp.total_minutes) }}</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="ap-list-card">
+          <div v-for="entry in team.companyTimeEntries.entries" :key="entry.id" class="ap-list-row" style="cursor: default">
+            <div class="ap-list-avatar" style="background: #f8fafc; color: #64748b">
+              <q-icon name="schedule" size="16px" />
+            </div>
+            <div class="ap-list-main">
+              <div class="ap-list-title">{{ entry.user?.name }} · {{ entry.project?.title }}</div>
+              <div class="ap-list-sub">
+                {{ formatDate(entry.entry_date) }} · {{ entry.start_time?.slice(0, 5) }}–{{ entry.end_time?.slice(0, 5) }}
+              </div>
+            </div>
+            <div class="ap-list-right">
+              <div class="ap-list-amount">{{ formatDuration(entry.duration_minutes) }}</div>
+            </div>
+          </div>
+        </div>
+      </template>
+    </template>
+
     <!-- Drawer: Team-Mitglied einladen -->
     <q-dialog v-model="inviteDialog.open" position="right" full-height maximized-on-mobile persistent>
       <q-card style="width: 460px; max-width: 95vw; display: flex; flex-direction: column">
@@ -196,7 +270,82 @@ export default {
       loading.value = false;
     };
 
+    // ---- Zeiterfassung: firmenweite Monatsuebersicht ----
+    const currentMonth = ref(new Date().toISOString().slice(0, 7)); // "YYYY-MM"
+
+    const monthLabel = computed(() => {
+      const [y, m] = currentMonth.value.split("-").map(Number);
+      return new Date(y, m - 1, 1).toLocaleDateString("de-DE", {
+        month: "long",
+        year: "numeric",
+      });
+    });
+
+    const shiftMonth = (delta) => {
+      const [y, m] = currentMonth.value.split("-").map(Number);
+      const d = new Date(y, m - 1 + delta, 1);
+      currentMonth.value = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+      team.fetchCompanyTimeEntries(currentMonth.value);
+    };
+
+    const formatDuration = (minutes) => {
+      const total = Math.max(0, Number(minutes) || 0);
+      const h = Math.floor(total / 60);
+      const m = total % 60;
+      return `${h}:${String(m).padStart(2, "0")} h`;
+    };
+
+    const formatDate = (val) => (val ? new Date(val).toLocaleDateString("de-DE") : "-");
+
+    // CSV-Export der aktuell geladenen Monatsansicht - fuers Lohnbuero/den
+    // Steuerberater. Semikolon als Trenner (deutsches Excel erwartet das
+    // Format), UTF-8 BOM voran, damit Umlaute in Excel korrekt ankommen.
+    const csvEscape = (value) => {
+      const str = String(value ?? "");
+      return /[;"\n]/.test(str) ? `"${str.replace(/"/g, '""')}"` : str;
+    };
+
+    const exportCsv = () => {
+      const entries = team.companyTimeEntries.entries;
+      if (!entries.length) return;
+
+      const header = [
+        "Datum",
+        "Start",
+        "Ende",
+        "Pause (Min)",
+        "Dauer (Min)",
+        "Mitarbeiter",
+        "Projekt",
+        "Notiz",
+      ];
+      const rows = entries.map((entry) => [
+        formatDate(entry.entry_date),
+        entry.start_time?.slice(0, 5) || "",
+        entry.end_time?.slice(0, 5) || "",
+        entry.break_minutes ?? 0,
+        entry.duration_minutes ?? 0,
+        entry.user?.name || "",
+        entry.project?.title || "",
+        entry.description || "",
+      ]);
+
+      const csvContent =
+        "\uFEFF" + [header, ...rows].map((row) => row.map(csvEscape).join(";")).join("\r\n");
+
+      const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `zeiterfassung_${currentMonth.value}.csv`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+    };
+
     onMounted(load);
+    onMounted(() => team.fetchCompanyTimeEntries(currentMonth.value));
 
     const openInviteDrawer = () => {
       inviteForm.name = "";
@@ -254,6 +403,12 @@ export default {
       openInviteDrawer,
       onInvite,
       onRemove,
+      currentMonth,
+      monthLabel,
+      shiftMonth,
+      formatDuration,
+      formatDate,
+      exportCsv,
     };
   },
 };
@@ -345,5 +500,30 @@ export default {
   border-radius: 999px;
   white-space: nowrap;
   letter-spacing: 0.01em;
+}
+.ap-list-amount {
+  font-size: 13.5px;
+  font-weight: 700;
+  color: #1d4ed8;
+  white-space: nowrap;
+}
+.ap-section-title {
+  display: flex;
+  align-items: center;
+  font-size: 14px;
+  font-weight: 700;
+  color: #0f172a;
+}
+.ap-empty-card {
+  padding: 32px 20px;
+  text-align: center;
+  background: #ffffff;
+  border: 1px dashed #d8dbe8;
+  border-radius: 14px;
+}
+.ap-empty-text {
+  margin-top: 8px;
+  font-size: 13px;
+  color: #94a3b8;
 }
 </style>
