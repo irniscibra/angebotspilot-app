@@ -697,6 +697,12 @@ export default {
       { label: "Dachdecker", value: "dachdecker" },
       { label: "Garten & Landschaftsbau", value: "gartenbau" },
       { label: "Kälte & Klimatechnik", value: "kaelte" },
+      { label: "Erdbau", value: "erdbau" },
+      { label: "Hochbau", value: "hochbau" },
+      { label: "Tiefbau", value: "tiefbau" },
+      { label: "Sanierung", value: "sanierung" },
+      { label: "Gebäudereinigung", value: "reinigung" },
+      { label: "Entrümpelung", value: "entruempelung" },
       { label: "Sonstiges Baugewerk", value: "sonstiges" },
     ];
 

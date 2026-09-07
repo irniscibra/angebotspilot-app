@@ -29,7 +29,11 @@ class QuoteAIService
         // Intelligenten Katalog-Kontext bauen (relevante Artikel zuerst)
         $catalogContext = $this->buildSmartCatalogContext($allMaterials, $description);
 
-        $systemPrompt = $this->buildSystemPrompt($company, $catalogContext);
+        // Gewerk kommt vom Angebot selbst (pro-Angebot waehlbar, z.B. bei Betrieben
+        // mit mehreren Taetigkeiten), Firmen-Gewerk nur als Fallback.
+        $trade = $quote->trade ?: $company->trade;
+
+        $systemPrompt = $this->buildSystemPrompt($company, $catalogContext, $trade);
 
         $response = OpenAI::chat()->create([
             'model' => 'gpt-4o',
@@ -216,12 +220,14 @@ class QuoteAIService
     /**
      * Baut den System-Prompt mit Firmendaten und Materialkatalog.
      */
-    private function buildSystemPrompt(Company $company, string $catalogContext): string
+    private function buildSystemPrompt(Company $company, string $catalogContext, ?string $trade = null): string
     {
         $hourlyRate = number_format($company->default_hourly_rate, 2, '.', '');
         $vatRate = number_format($company->default_vat_rate, 2, '.', '');
-        $tradeLabel = TradeReferenceService::getLabel($company->trade);
-        $tradePrices = TradeReferenceService::getPrices($company->trade);
+        $trade = $trade ?: $company->trade;
+        $tradeLabel = TradeReferenceService::getLabel($trade);
+        $tradePrices = TradeReferenceService::getPrices($trade);
+        $otherTradePrices = TradeReferenceService::getAllPricesExcept($trade);
 
         // Katalog-Abschnitt nur wenn Materialien vorhanden
         $catalogSection = '';
@@ -296,15 +302,23 @@ REGELN FÜR DIE KALKULATION:
 8. Bei Heizungsarbeiten: EnEV/GEG Normen berücksichtigen
 9. Bei Sanitärarbeiten: DIN und DVGW Normen berücksichtigen
 
-GEWERK: {$tradeLabel}
+HAUPTGEWERK DIESES ANGEBOTS: {$tradeLabel}
 
-REFERENZPREISE FÜR DIESES GEWERK (Netto, Stand 2026 – NUR verwenden wenn KEIN Katalog-Artikel passt):
+REFERENZPREISE HAUPTGEWERK (Netto, Stand 2026 – primäre Grundlage, NUR verwenden wenn KEIN Katalog-Artikel passt):
 {$tradePrices}
+
+REFERENZPREISE ANDERER GEWERKE (Netto, Stand 2026 – NUR verwenden wenn eine einzelne Position in der
+Projektbeschreibung eindeutig zu einem ANDEREN Gewerk gehört als dem Hauptgewerk oben, z.B. Erdarbeiten
+oder Kellerabdichtung in einem Hochbau-Angebot. Für alle Positionen, die zum Hauptgewerk passen, IMMER
+die Hauptgewerk-Referenzpreise oben verwenden, nicht diese hier):
+{$otherTradePrices}
 
 WICHTIG ZU DEN REFERENZPREISEN:
 - Diese Preise sind die verbindliche Grundlage, wenn kein Katalog-Artikel passt.
 - NIEMALS außerhalb dieser Preisspannen kalkulieren, auch nicht bei
   ungewöhnlichen Formulierungen oder unklaren Einheiten in der Anfrage.
+- Prüfe JEDE Position einzeln: gehört sie fachlich zum Hauptgewerk oder zu einem
+  anderen Gewerk? Wähle dann den passenden Referenzblock für genau diese Position.
 - Bei Mengen-/Leistungsangaben in kcal oder anderen unüblichen Einheiten:
   IMMER zuerst in kW umrechnen (1 kW ≈ 860 kcal/h), dann die passende
   Preisklasse aus der Liste wählen.

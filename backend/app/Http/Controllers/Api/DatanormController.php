@@ -45,10 +45,13 @@ class DatanormController extends Controller
         $file = $request->file('file');
         $extension = strtolower($file->getClientOriginalExtension());
 
-        // Akzeptierte Dateitypen
-        if (!in_array($extension, ['dat', 'csv', 'txt', '001', '002', '003', '004', '005'])) {
+        // Akzeptierte Dateitypen: .dat/.csv/.txt sowie nummerierte Datanorm-Teildateien .001-.999
+        // (manche Großhändler liefern mehrteilige Datanorm-Dateien mit fortlaufender Nummerierung
+        // ueber .005 hinaus, z.B. .006, .012 - daher Regex statt fester Liste)
+        $isNumberedPart = (bool) preg_match('/^\d{3}$/', $extension);
+        if (!in_array($extension, ['dat', 'csv', 'txt']) && !$isNumberedPart) {
             return response()->json([
-                'message' => 'Ungültiges Dateiformat. Akzeptiert werden: .dat, .csv, .txt, .001-.005'
+                'message' => 'Ungültiges Dateiformat. Akzeptiert werden: .dat, .csv, .txt, .001-.999'
             ], 422);
         }
 

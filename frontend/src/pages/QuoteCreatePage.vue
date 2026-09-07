@@ -360,6 +360,22 @@
                   ><q-icon name="folder" color="grey-5"
                 /></template>
               </q-select>
+              <q-select
+                v-model="selectedTrade"
+                filled
+                label="Gewerk für dieses Angebot"
+                hint="Nur nötig, wenn Sie mehrere Gewerke ausführen – sonst gilt automatisch Ihr Gewerk aus den Einstellungen."
+                :options="tradeOptions"
+                option-value="value"
+                option-label="label"
+                emit-value
+                map-options
+                class="q-mb-md"
+              >
+                <template v-slot:prepend
+                  ><q-icon name="construction" color="grey-5"
+                /></template>
+              </q-select>
               <q-btn
                 type="submit"
                 color="primary"
@@ -447,6 +463,25 @@
                   ><q-icon name="folder" color="grey-5"
                 /></template>
               </q-select>
+              <q-select
+                v-model="selectedTrade"
+                filled
+                dense
+                label="Gewerk für dieses Angebot"
+                :options="tradeOptions"
+                option-value="value"
+                option-label="label"
+                emit-value
+                map-options
+                class="col"
+              >
+                <template v-slot:prepend
+                  ><q-icon name="construction" color="grey-5"
+                /></template>
+              </q-select>
+            </div>
+            <div style="color: #94a3b8; font-size: 12px; margin-top: -8px" class="q-mb-md">
+              Gewerk nur nötig, wenn Sie mehrere Tätigkeiten ausführen – sonst gilt automatisch Ihr Gewerk aus den Einstellungen.
             </div>
             <div v-if="templatesLoading" class="flex flex-center q-pa-lg">
               <q-spinner color="teal" size="30px" />
@@ -591,6 +626,24 @@
                   ><q-icon name="folder" color="grey-5"
                 /></template>
               </q-select>
+              <q-select
+                v-model="selectedTrade"
+                filled
+                label="Gewerk für dieses Angebot"
+                :options="tradeOptions"
+                option-value="value"
+                option-label="label"
+                emit-value
+                map-options
+                class="col"
+              >
+                <template v-slot:prepend
+                  ><q-icon name="construction" color="grey-5"
+                /></template>
+              </q-select>
+            </div>
+            <div style="color: #94a3b8; font-size: 12px; margin-top: -8px" class="q-mb-md">
+              Gewerk nur nötig, wenn Sie mehrere Tätigkeiten ausführen – sonst gilt automatisch Ihr Gewerk aus den Einstellungen.
             </div>
             <q-btn
               color="indigo"
@@ -1645,6 +1698,28 @@ export default {
     const allTemplates = ref([]);
     const templatesLoading = ref(false);
 
+    // Gewerk fuer dieses Angebot (Default: Firmen-Gewerk aus den Einstellungen,
+    // aber pro Angebot aenderbar - wichtig fuer Betriebe mit mehreren Taetigkeiten).
+    const selectedTrade = ref(null);
+    const tradeOptions = [
+      { label: "Sanitär, Heizung, Klima (SHK)", value: "shk" },
+      { label: "Elektro", value: "elektro" },
+      { label: "Maler & Lackierer", value: "maler" },
+      { label: "Trockenbau & Innenausbau", value: "trockenbau" },
+      { label: "Fliesen & Naturstein", value: "fliesen" },
+      { label: "Schreiner & Tischler", value: "schreiner" },
+      { label: "Dachdecker", value: "dachdecker" },
+      { label: "Garten & Landschaftsbau", value: "gartenbau" },
+      { label: "Kälte & Klimatechnik", value: "kaelte" },
+      { label: "Erdbau", value: "erdbau" },
+      { label: "Hochbau", value: "hochbau" },
+      { label: "Tiefbau", value: "tiefbau" },
+      { label: "Sanierung", value: "sanierung" },
+      { label: "Gebäudereinigung", value: "reinigung" },
+      { label: "Entrümpelung", value: "entruempelung" },
+      { label: "Sonstiges Baugewerk", value: "sonstiges" },
+    ];
+
     // Empty state
     const emptyTitle = ref("");
 
@@ -1793,6 +1868,7 @@ export default {
       loadTemplates();
       loadProjects();
       prefillPromise = prefillFromProject();
+      selectedTrade.value = authStore.user?.company?.trade || null;
     });
 
     onUnmounted(() => {
@@ -1874,6 +1950,7 @@ export default {
           address: address.value,
           customer_id: selectedCustomer.value,
           project_id: selectedProject.value,
+          trade: selectedTrade.value,
         });
         aiNotes.value = r.ai_notes || "";
         progress.value = 1;
@@ -1924,6 +2001,7 @@ export default {
           customer_id: selectedCustomer.value || null,
           project_id: selectedProject.value || null,
           project_address: address.value || null,
+          trade: selectedTrade.value || null,
           use_ai: false,
         });
         const quote = res.data.quote || res.data;
@@ -1958,6 +2036,7 @@ export default {
           customer_id: selectedCustomer.value || null,
           project_id: selectedProject.value || null,
           project_address: address.value || null,
+          trade: selectedTrade.value || null,
           use_ai: false,
         });
         const quote = res.data.quote || res.data;
@@ -2299,6 +2378,8 @@ export default {
       selectedProject,
       projectOptions,
       filterProjects,
+      selectedTrade,
+      tradeOptions,
       quoteCreated,
       generating,
       progress,

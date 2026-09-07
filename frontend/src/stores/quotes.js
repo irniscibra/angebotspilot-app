@@ -62,6 +62,7 @@ export const useQuoteStore = defineStore('quotes', {
           customer_id: data.customer_id || null,
           project_id: data.project_id || null,
           project_address: data.address || null,
+          trade: data.trade || null,
           use_ai: true,
         })
         this.currentQuote = response.data.quote

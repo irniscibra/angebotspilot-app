@@ -20,8 +20,43 @@ class TradeReferenceService
             'schreiner' => self::schreiner(),
             'dachdecker' => self::dachdecker(),
             'gartenbau' => self::gartenbau(),
+            'erdbau' => self::erdbau(),
+            'hochbau' => self::hochbau(),
+            'tiefbau' => self::tiefbau(),
+            'sanierung' => self::sanierung(),
+            'reinigung' => self::reinigung(),
+            'entruempelung' => self::entruempelung(),
             default => self::allgemein(),
         };
+    }
+
+    /**
+     * Referenzpreise ALLER Gewerke außer dem übergebenen (Haupt-)Gewerk,
+     * als ein zusammengefasster Textblock je Gewerk mit eigener Überschrift.
+     * Wird zusätzlich zum Hauptgewerk in den KI-Prompt gegeben, damit
+     * Positionen aus einem anderen Gewerk (z.B. Erdarbeiten in einem
+     * Hochbau-Angebot) trotzdem realistische Referenzwerte bekommen,
+     * statt dass die KI frei schätzt.
+     */
+    public static function getAllPricesExcept(?string $trade): string
+    {
+        $keys = [
+            'shk', 'elektro', 'maler', 'fliesen', 'schreiner', 'dachdecker',
+            'gartenbau', 'erdbau', 'hochbau', 'tiefbau', 'sanierung',
+            'reinigung', 'entruempelung',
+        ];
+
+        $blocks = [];
+        foreach ($keys as $key) {
+            if ($key === $trade) {
+                continue;
+            }
+            $label = self::getLabel($key);
+            $prices = self::getPrices($key);
+            $blocks[] = "=== {$label} ===" . $prices;
+        }
+
+        return implode("\n\n", $blocks);
     }
 
     public static function getTagline(?string $trade): string
@@ -37,6 +72,12 @@ class TradeReferenceService
         'gartenbau'  => 'Garten- und Landschaftsbau',
         'geruestbau' => 'Gerüstbau',
         'kaelte'     => 'Kälte- und Klimatechnik',
+        'erdbau'      => 'Erdbau · Aushub · Erdarbeiten',
+        'hochbau'     => 'Hochbau · Rohbau · Mauerwerk',
+        'tiefbau'     => 'Tiefbau · Kanal- und Straßenbau',
+        'sanierung'   => 'Sanierung · Renovierung · Abbruch',
+        'reinigung'   => 'Gebäudereinigung · Unterhalts- und Grundreinigung',
+        'entruempelung' => 'Entrümpelung · Haushaltsauflösung',
         default      => '',
     };
 }
@@ -54,6 +95,12 @@ class TradeReferenceService
             'gartenbau'  => 'Garten & Landschaftsbau',
             'geruestbau' => 'Gerüstbau',
             'kaelte'     => 'Kälte & Klimatechnik',
+            'erdbau'      => 'Erdbau',
+            'hochbau'     => 'Hochbau',
+            'tiefbau'     => 'Tiefbau',
+            'sanierung'   => 'Sanierung',
+            'reinigung'   => 'Gebäudereinigung',
+            'entruempelung' => 'Entrümpelung',
             default      => 'Allgemeines Baugewerk',
         };
     }
@@ -400,6 +447,121 @@ LEISTUNGSPREISE GARTENBAU (inkl. Material, Netto):
 - Baum fällen: 200-2.000€
 - Bewässerungsanlage: 20-50€/m²
 - Zaunmontage: 40-120€/m';
+    }
+
+    private static function erdbau(): string
+    {
+        return '
+STUNDENSÄTZE ERDBAU (Netto):
+- Erdbauer/Baggerfahrer:  Ost 40-55€ | Mitte 50-68€ | Süd/West 60-85€
+- Polier/Meister:         Ost 55-75€ | Mitte 68-90€ | Süd/West 82-115€
+- Minibagger inkl. Fahrer (Gerätesatz, nicht Person): 65-180€/Std
+
+LEISTUNGSPREISE ERDBAU (Netto, bereits reine Arbeits-/Maschinenleistung ohne Material):
+- Aushub (Bagger + Verladen, ohne Entsorgung): 15-80€/m³
+- Boden entsorgen (sauber bis gemischt, kontaminiert deutlich höher): 15-70€/m³
+- Humus abtragen (inkl. Abfuhr): 5-18€/m²
+- Planieren (Fläche einebnen und vorbereiten): 5-30€/m²
+- An-/Abfahrt Baggereinsatz (pauschal, je nach Entfernung/Gerät): 50-300€
+
+HINWEIS Material vs. Arbeit: Preise ohne den Zusatz "INKLUSIVE Material" sind reine Arbeits-/Maschinenleistungen OHNE Materialkosten. Ist ein Preis als "INKLUSIVE Material" oder "KOMPLETT" markiert, diesen NIEMALS als reinen Arbeitspreis verwenden, wenn der Kunde "ohne Material" wünscht - stattdessen den separat ausgewiesenen Arbeits-/Verlegeanteil nutzen.';
+    }
+
+    private static function hochbau(): string
+    {
+        return '
+STUNDENSÄTZE HOCHBAU (Netto):
+- Maurer/Facharbeiter:  Ost 45-60€ | Mitte 58-75€ | Süd/West 70-95€
+- Bauhelfer:            Ost 30-38€ | Mitte 35-42€ | Süd/West 38-45€
+- Polier/Meister:       Ost 60-80€ | Mitte 75-95€ | Süd/West 90-120€
+
+LEISTUNGSPREISE HOCHBAU (Netto):
+- Mauerwerk Kalksandstein/Ziegel (24cm) INKLUSIVE Material: 110-130€/m²
+- Mauerwerk-Material allein (Steine+Mörtel, ohne Arbeit): ca. 40-55€/m² je nach Steinart
+- Verblendmauerwerk zweischalig (Hintermauerung+Dämmung+Verblendung) INKLUSIVE Material: 280-290€/m²
+- Ortbeton (Material+Einbau+Schalung+Bewehrung) INKLUSIVE Material: 180-320€/m³
+- Beton-Material pur (Fertigbeton C20/25-C25/30, angeliefert, ohne Einbau): 100-150€/m³
+- Schalung+Einbau+Bewehrung (reine Arbeit, ohne Betonmaterial): 60-170€/m³
+- Wand-/Deckenschalung INKLUSIVE Beton: 150-450€/m²
+- Bodenplatte/Fundament INKLUSIVE Material: 90-220€/m²
+- Kellerwände (höherer Schal-/Bewehrungsaufwand) INKLUSIVE Material: 250-380€/m³
+- Erdaushub für Fundament (Bagger + Verladen, ohne Entsorgung, reine Arbeit): 15-80€/m³
+- Entsorgung Erdaushub (reine Arbeit): 15-70€/m³
+
+HINWEIS Material vs. Arbeit: Preise ohne den Zusatz "INKLUSIVE Material" sind reine Arbeits-/Maschinenleistungen OHNE Materialkosten. Ist ein Preis als "INKLUSIVE Material" oder "KOMPLETT" markiert, diesen NIEMALS als reinen Arbeitspreis verwenden, wenn der Kunde "ohne Material" wünscht - stattdessen den separat ausgewiesenen Arbeits-/Verlegeanteil nutzen.';
+    }
+
+    private static function tiefbau(): string
+    {
+        return '
+STUNDENSÄTZE TIEFBAU (Netto):
+- Facharbeiter:         Ost 42-58€ | Mitte 55-72€ | Süd/West 68-92€
+- Polier/Meister:       Ost 58-78€ | Mitte 72-92€ | Süd/West 88-115€
+- Minibagger/Radlader inkl. Fahrer (Gerätesatz): 65-180€/Std
+
+LEISTUNGSPREISE TIEFBAU (Netto):
+- Ausschachtung (Bagger + Verladen, reine Arbeit): 15-80€/m³
+- Kanal-/Rohrverlegung KOMPLETT INKLUSIVE Material (Fachfirma, normaler Boden): 60-150€/m (Fels/Grundwasser bis 300€/m)
+  - davon Grabenaushub (Arbeit): 30-80€/m
+  - davon Rohrmaterial inkl. Formteile/Dichtringe (KG-Rohr DN100-125): 8-20€/m
+  - davon Verlegen/Ausrichten (Arbeit): 15-35€/m
+  - davon Verfüllen/Verdichten (Arbeit): 10-25€/m
+- Pflasterarbeiten Einfahrt/Gehweg INKLUSIVE Material: 55-140€/m²
+- Reine Verlegearbeit Pflaster (ohne Material): 30-60€/m²
+- Asphaltarbeiten (i.d.R. inkl. Material): 40-80€/m²
+- Entsorgung Erdaushub (reine Arbeit): 15-70€/m³
+- Entsorgung reiner Bauschutt: ca. 54€/Tonne
+
+HINWEIS Material vs. Arbeit: Preise ohne den Zusatz "INKLUSIVE Material" sind reine Arbeits-/Maschinenleistungen OHNE Materialkosten. Ist ein Preis als "INKLUSIVE Material" oder "KOMPLETT" markiert, diesen NIEMALS als reinen Arbeitspreis verwenden, wenn der Kunde "ohne Material" wünscht - stattdessen den separat ausgewiesenen Arbeits-/Verlegeanteil nutzen.';
+    }
+
+    private static function sanierung(): string
+    {
+        return '
+STUNDENSÄTZE SANIERUNG (Netto):
+- Facharbeiter:  Ost 42-58€ | Mitte 55-72€ | Süd/West 68-92€
+- Meister:       Ost 58-78€ | Mitte 72-92€ | Süd/West 88-115€
+
+LEISTUNGSPREISE SANIERUNG (Netto):
+- Kleine Abbrucharbeiten/Entkernung: 25-50€/m²
+- Komplettabriss kleines Gebäude/Anbau: 50-100€/m² bzw. 50-120€/m³
+- Kellerabdichtung außen INKLUSIVE Material (inkl. Freilegung, je nach Aufwand): 150-350€/m²
+- Verputzarbeiten Innenputz Standard INKLUSIVE Material: 15-35€/m²
+- Entsorgung reiner Bauschutt: ca. 54€/Tonne
+- Asbest-Zuschlag bei Abbruch: +30-50€/m²
+
+HINWEIS Material vs. Arbeit: Preise ohne den Zusatz "INKLUSIVE Material" sind reine Arbeits-/Maschinenleistungen OHNE Materialkosten. Ist ein Preis als "INKLUSIVE Material" oder "KOMPLETT" markiert, diesen NIEMALS als reinen Arbeitspreis verwenden, wenn der Kunde "ohne Material" wünscht - stattdessen den separat ausgewiesenen Arbeits-/Verlegeanteil nutzen.';
+    }
+
+    private static function reinigung(): string
+    {
+        return '
+STUNDENSÄTZE REINIGUNG (Netto):
+- Reinigungskraft: 25-35€/Std (Tariflohn Lohngruppe 1 seit 2026: 15€/Std brutto, Verrechnungssatz für Kunden i.d.R. deutlich höher)
+
+LEISTUNGSPREISE REINIGUNG (Netto, bereits reine Dienstleistung ohne separaten Materialanteil):
+- Unterhaltsreinigung: 0,80-1,50€/m²
+- Grundreinigung: 2,50-6,00€/m²
+- Treppenhausreinigung: 2,50-5,00€/m²
+- Sanitärreinigung: 3,00-5,00€/m²
+- Bauendreinigung: 5,00-12,00€/m²
+- Fensterreinigung Standardfenster: 2,50-5,00€/Stück
+- Fensterreinigung Schaufenster/Glasfassade: 8,00-15,00€/Stück';
+    }
+
+    private static function entruempelung(): string
+    {
+        return '
+STUNDENSÄTZE ENTRÜMPELUNG (Netto):
+- Helfer: 25-35€/Std
+
+LEISTUNGSPREISE ENTRÜMPELUNG (Netto, bereits reine Dienstleistung ohne separaten Materialanteil):
+- Entrümpelung Wohnung (nur Abtransport): 15-25€/m²
+- Entrümpelung Komplett-Service (inkl. Besenrein): 30-60€/m²
+- Entrümpelung Messie-Wohnung: 25-60€/m²
+- Kellerentrümpelung: 15-35€/m²
+- Sperrmüllcontainer 7m³: 200-650€
+- Einzelmöbel-Entsorgung (Sofa/Schrank): 50-150€, Kühlschrank: 30-50€, Matratze: 10-30€';
     }
 
     private static function allgemein(): string

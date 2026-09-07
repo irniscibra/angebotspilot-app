@@ -76,6 +76,7 @@ class QuoteController extends Controller
     'customer_id' => 'nullable|exists:customers,id',
     'project_id' => 'nullable|exists:projects,id',
     'project_address' => 'nullable|string|max:500',
+    'trade' => 'nullable|string|max:50',
     'use_ai' => 'boolean',
 ]);
 
@@ -99,6 +100,7 @@ class QuoteController extends Controller
             'project_title' => 'Neues Angebot',
             'project_description' => $request->project_description,
             'project_address' => $request->project_address,
+            'trade' => $request->trade ?: $company->trade,
             'vat_rate' => $company->default_vat_rate,
             'valid_until' => now()->addDays($company->quote_validity_days),
         ]);
@@ -141,6 +143,7 @@ class QuoteController extends Controller
             'project_title' => 'sometimes|string|max:255',
             'project_description' => 'sometimes|string|max:5000',
             'project_address' => 'nullable|string|max:500',
+            'trade' => 'nullable|string|max:50',
             'customer_id' => 'nullable|exists:customers,id',
             'project_id' => 'nullable|exists:projects,id',
             'discount_percent' => 'sometimes|numeric|min:0|max:100',
@@ -154,6 +157,7 @@ class QuoteController extends Controller
             'project_title',
             'project_description',
             'project_address',
+            'trade',
             'customer_id',
             'project_id',
             'discount_percent',
@@ -426,12 +430,13 @@ public function send(Request $request, Quote $quote): JsonResponse
         $region = $this->getRegionFromPlz($plz);
 
         // Gewerk aus Company holen
-        $trade = $quote->company->trade ?? 'shk';
+        $trade = $quote->trade ?: ($quote->company->trade ?? 'shk');
 
         $tradeLabel = \App\Services\TradeReferenceService::getLabel($trade);
 
 
      $tradeReferenz = \App\Services\TradeReferenceService::getPrices($trade);
+     $andereGewerkeReferenz = \App\Services\TradeReferenceService::getAllPricesExcept($trade);
 
         // Regionaler Faktor
         if (str_contains($region, 'sehr hohes Preisniveau')) {
@@ -453,6 +458,14 @@ Region: ' . $region . '
 REFERENZPREISE FÜR ' . strtoupper($tradeLabel) . ' (Deutschland 2024/2025)
 ════════════════════════════════════════════
 ' . $tradeReferenz . '
+
+════════════════════════════════════════════
+REFERENZPREISE ANDERER GEWERKE
+════════════════════════════════════════════
+Nur verwenden, wenn eine einzelne Position eindeutig NICHT zu ' . $tradeLabel . ' gehört,
+sondern fachlich klar zu einem anderen Gewerk (z.B. Erdarbeiten oder Kellerabdichtung
+in einem Hochbau-Angebot). Für alle anderen Positionen immer die Referenzpreise oben verwenden.
+' . $andereGewerkeReferenz . '
 
 ════════════════════════════════════════════
 BEWERTUNGSREGELN – ABSOLUT KRITISCH

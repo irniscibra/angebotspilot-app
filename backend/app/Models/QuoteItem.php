@@ -11,6 +11,7 @@ class QuoteItem extends Model
 
     protected $fillable = [
         'quote_id',
+        'parent_id',
         'position_number',
         'group_name',
         'type',
@@ -22,6 +23,7 @@ class QuoteItem extends Model
         'total_price',
         'material_id',
         'service_id',
+        'include_in_setup_costs',
         'is_ai_generated',
         'ai_confidence',
         'sort_order',
@@ -33,6 +35,7 @@ class QuoteItem extends Model
         'total_price' => 'decimal:2',
         'ai_confidence' => 'decimal:2',
         'is_ai_generated' => 'boolean',
+        'include_in_setup_costs' => 'boolean',
     ];
 
     protected static function booted(): void
@@ -65,5 +68,21 @@ class QuoteItem extends Model
     public function service()
     {
         return $this->belongsTo(Service::class);
+    }
+
+    /**
+     * VOB-Unterpositionen: Eltern-Position (reine Ueberschrift ohne eigenen Preis).
+     */
+    public function parent()
+    {
+        return $this->belongsTo(QuoteItem::class, 'parent_id');
+    }
+
+    /**
+     * VOB-Unterpositionen: Kind-Positionen unterhalb dieser Position.
+     */
+    public function children()
+    {
+        return $this->hasMany(QuoteItem::class, 'parent_id')->orderBy('sort_order');
     }
 }

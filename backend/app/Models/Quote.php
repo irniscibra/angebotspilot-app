@@ -20,6 +20,7 @@ class Quote extends Model
         'project_title',
         'project_description',
         'project_address',
+        'trade',
         'ai_prompt',
         'ai_response',
         'ai_model',

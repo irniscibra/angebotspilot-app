@@ -32,12 +32,12 @@
               @dragover.prevent="isDragover = true"
               @dragleave="isDragover = false"
             >
-              <input ref="fileInput" type="file" accept=".dat,.csv,.txt,.001,.002,.003,.004,.005,*/*" @change="onFileSelect" class="hidden" />
+              <input ref="fileInput" type="file" accept=".dat,.csv,.txt,*/*" @change="onFileSelect" class="hidden" />
 
               <div v-if="!selectedFile">
                 <q-icon name="upload_file" size="48px" style="color: #94a3b8;" />
                 <div class="q-mt-sm" style="font-weight: 600; color: #475569;">Datanorm-Datei hierher ziehen</div>
-                <div style="color: #94a3b8; font-size: 12px;" class="q-mt-xs">oder klicken zum Auswählen – .dat, .csv, .txt (max. 50MB)</div>
+                <div style="color: #94a3b8; font-size: 12px;" class="q-mt-xs">oder klicken zum Auswählen – .dat, .csv, .txt, .001-.999 (max. 50MB)</div>
               </div>
 
               <div v-else>
