@@ -234,6 +234,13 @@ public function hasActiveSubscription(): bool
         'pro' => 2,
     ];
 
+    /**
+     * Preis pro zusaetzlichem (gekauften) Mitarbeiter-Sitzplatz, in EUR/Monat.
+     * Gilt identisch fuer Starter und Pro. Muss mit dem in Stripe hinterlegten
+     * STRIPE_PRICE_SEAT-Preis uebereinstimmen (siehe StripeController).
+     */
+    public const SEAT_PRICE_EUR = 9.99;
+
     public function employeeSeatLimit(): int
     {
         $included = self::EMPLOYEE_SEATS_INCLUDED[$this->plan] ?? 0;

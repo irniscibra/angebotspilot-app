@@ -5,17 +5,32 @@
         <h5 class="q-my-none" style="font-weight: 700; color: #0f172a">Team</h5>
         <div style="font-size: 13px; color: #64748b; margin-top: 2px">
           {{ team.seats.used }} von {{ team.seats.limit }} Mitarbeiter-Sitzplätzen belegt
+          <span v-if="team.seats.purchased > 0">
+            ({{ team.seats.purchased }} zusätzlich gebucht, je {{ formatEuro(team.seats.price_per_seat) }} €/Monat)
+          </span>
         </div>
       </div>
-      <q-btn
-        unelevated
-        no-caps
-        dense
-        icon="person_add"
-        label="Einladen"
-        style="background: #4f46e5; color: #ffffff; border-radius: 10px; font-weight: 600; padding: 8px 16px"
-        @click="openInviteDrawer"
-      />
+      <div class="row items-center q-gutter-sm">
+        <q-btn
+          unelevated
+          no-caps
+          dense
+          outline
+          icon="tune"
+          label="Sitzplätze verwalten"
+          style="border-radius: 10px; font-weight: 600; padding: 8px 16px; color: #4f46e5; border: 1px solid #c7d2fe"
+          @click="openSeatsDialog"
+        />
+        <q-btn
+          unelevated
+          no-caps
+          dense
+          icon="person_add"
+          label="Einladen"
+          style="background: #4f46e5; color: #ffffff; border-radius: 10px; font-weight: 600; padding: 8px 16px"
+          @click="openInviteDrawer"
+        />
+      </div>
     </div>
 
     <q-banner
@@ -25,7 +40,11 @@
       style="background: #fffbeb; border: 1px solid #fde68a; color: #92400e; font-size: 13px"
     >
       <q-icon name="info" size="16px" class="q-mr-xs" />
-      Alle Mitarbeiter-Sitzplätze sind belegt. Um weitere Mitarbeiter einzuladen, kontaktieren Sie uns für zusätzliche Sitzplätze.
+      Alle Mitarbeiter-Sitzplätze sind belegt.
+      <a href="#" @click.prevent="openSeatsDialog" style="color: #92400e; font-weight: 700; text-decoration: underline">
+        Weitere Sitzplätze dazu buchen
+      </a>
+      , um mehr Mitarbeiter einzuladen.
     </q-banner>
 
     <div v-if="loading" class="flex flex-center q-pa-xl">
@@ -224,6 +243,114 @@
         </q-card-actions>
       </q-card>
     </q-dialog>
+
+    <!-- Drawer: Mitarbeiter-Sitzplätze verwalten -->
+    <q-dialog v-model="seatsDialog.open" position="right" full-height maximized-on-mobile persistent>
+      <q-card style="width: 460px; max-width: 95vw; display: flex; flex-direction: column">
+        <q-card-section class="row items-center q-pb-sm" style="border-bottom: 1px solid #f1f5f9; flex-shrink: 0">
+          <h6 class="q-my-none" style="font-weight: 600; color: #0f172a">Mitarbeiter-Sitzplätze verwalten</h6>
+          <q-space />
+          <q-btn flat round dense icon="close" color="grey-5" v-close-popup />
+        </q-card-section>
+
+        <q-card-section class="q-gutter-md" style="flex: 1; overflow-y: auto">
+          <template v-if="!hasActivePlan">
+            <div style="font-size: 13px; color: #475569; line-height: 1.6">
+              Zusätzliche Mitarbeiter-Sitzplätze sind erst nach Buchung eines Starter- oder Pro-Abos verfügbar.
+            </div>
+            <q-btn
+              unelevated
+              no-caps
+              label="Zum Plan wählen"
+              :to="{ name: 'upgrade' }"
+              style="background: #4f46e5; color: #ffffff; border-radius: 10px; font-weight: 600"
+              v-close-popup
+            />
+          </template>
+
+          <template v-else>
+            <div style="font-size: 13px; color: #475569; line-height: 1.6">
+              Im <strong>{{ planLabel }}</strong>-Plan sind <strong>{{ includedSeats }}</strong>
+              Mitarbeiter-Sitzplätze enthalten. Aktuell genutzt: <strong>{{ team.seats.used }}</strong>.
+              Weitere Sitzplätze kosten <strong>{{ formatEuro(team.seats.price_per_seat) }} € / Monat</strong> je Platz
+              und lassen sich jederzeit anpassen.
+            </div>
+
+            <div>
+              <div class="ap-field-label">
+                <q-icon name="groups" size="16px" color="grey-5" class="q-mr-xs" />Zusätzliche Sitzplätze
+              </div>
+              <div class="row items-center q-gutter-sm">
+                <q-btn
+                  round
+                  dense
+                  outline
+                  icon="remove"
+                  color="grey-7"
+                  :disable="seatsForm.value <= minSeats"
+                  @click="seatsForm.value = Math.max(minSeats, seatsForm.value - 1)"
+                />
+                <div style="font-size: 20px; font-weight: 700; color: #0f172a; min-width: 32px; text-align: center">
+                  {{ seatsForm.value }}
+                </div>
+                <q-btn
+                  round
+                  dense
+                  outline
+                  icon="add"
+                  color="grey-7"
+                  :disable="seatsForm.value >= 50"
+                  @click="seatsForm.value = Math.min(50, seatsForm.value + 1)"
+                />
+              </div>
+              <div v-if="seatsForm.value < minSeats" style="font-size: 12px; color: #b91c1c; margin-top: 4px">
+                Mindestens {{ minSeats }} nötig, da aktuell {{ team.seats.used }} Mitarbeiter aktiv sind.
+              </div>
+            </div>
+
+            <div style="background: #f8fafc; border-radius: 10px; padding: 12px 14px; font-size: 13px; color: #334155">
+              <div class="row justify-between">
+                <span>{{ planLabel }}-Basis</span>
+                <span>{{ formatEuro(planBasePrice) }} €</span>
+              </div>
+              <div class="row justify-between q-mt-xs">
+                <span>{{ seatsForm.value }} × {{ formatEuro(team.seats.price_per_seat) }} € Sitzplätze</span>
+                <span>{{ formatEuro(seatsForm.value * team.seats.price_per_seat) }} €</span>
+              </div>
+              <q-separator class="q-my-xs" />
+              <div class="row justify-between">
+                <strong>Gesamt / Monat</strong>
+                <strong>{{ formatEuro(planBasePrice + seatsForm.value * team.seats.price_per_seat) }} €</strong>
+              </div>
+            </div>
+
+            <q-banner
+              v-if="seatsError"
+              rounded
+              style="background: #fef2f2; border: 1px solid #fecaca; color: #b91c1c; font-size: 13px"
+            >
+              {{ seatsError }}
+            </q-banner>
+          </template>
+        </q-card-section>
+
+        <q-card-actions
+          v-if="hasActivePlan"
+          align="right"
+          class="q-pa-md"
+          style="border-top: 1px solid #f1f5f9; flex-shrink: 0"
+        >
+          <q-btn flat label="Abbrechen" color="grey" v-close-popup />
+          <q-btn
+            label="Speichern"
+            :loading="team.saving"
+            :disable="seatsForm.value === team.seats.purchased || seatsForm.value < minSeats"
+            @click="onSaveSeats"
+            style="background: #4f46e5; color: #ffffff; border-radius: 10px; font-weight: 600"
+          />
+        </q-card-actions>
+      </q-card>
+    </q-dialog>
   </q-page>
 </template>
 
@@ -231,6 +358,12 @@
 import { computed, onMounted, reactive, ref } from "vue";
 import { useQuasar } from "quasar";
 import { useTeamStore } from "src/stores/team";
+import { useAuthStore } from "src/stores/auth";
+
+// Basispreis pro Firma/Monat je Plan - fuer die Gesamtpreis-Anzeige im
+// Sitzplatz-Dialog. Muss mit den Preisen auf UpgradePage.vue uebereinstimmen.
+const PLAN_BASE_PRICE = { starter: 39, pro: 69 };
+const PLAN_LABEL = { starter: "Starter", pro: "Pro" };
 
 export default {
   name: "TeamPage",
@@ -240,8 +373,41 @@ export default {
     const loading = ref(true);
     const error = ref("");
 
+    const authStore = useAuthStore();
+
     const inviteDialog = reactive({ open: false });
     const inviteForm = reactive({ name: "", email: "", role: "employee" });
+
+    // ---- Mitarbeiter-Sitzplätze verwalten ----
+    const seatsDialog = reactive({ open: false });
+    const seatsForm = reactive({ value: 0 });
+    const seatsError = ref("");
+
+    const hasActivePlan = computed(() => !!authStore.company?.stripe_subscription_id);
+    const planLabel = computed(() => PLAN_LABEL[authStore.plan] || authStore.plan);
+    const planBasePrice = computed(() => PLAN_BASE_PRICE[authStore.plan] || 0);
+    const includedSeats = computed(() => team.seats.limit - team.seats.purchased);
+    const minSeats = computed(() => Math.max(0, team.seats.used - includedSeats.value));
+
+    const formatEuro = (value) =>
+      Number(value || 0).toLocaleString("de-DE", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+    const openSeatsDialog = () => {
+      seatsForm.value = team.seats.purchased;
+      seatsError.value = "";
+      seatsDialog.open = true;
+    };
+
+    const onSaveSeats = async () => {
+      seatsError.value = "";
+      try {
+        await team.updateSeats(seatsForm.value);
+        $q.notify({ type: "positive", message: "Sitzplätze aktualisiert." });
+        seatsDialog.open = false;
+      } catch (e) {
+        seatsError.value = e.response?.data?.message || "Sitzplätze konnten nicht angepasst werden.";
+      }
+    };
 
     const roleOptions = [
       { label: "Mitarbeiter", value: "employee" },
@@ -409,6 +575,17 @@ export default {
       formatDuration,
       formatDate,
       exportCsv,
+      seatsDialog,
+      seatsForm,
+      seatsError,
+      hasActivePlan,
+      planLabel,
+      planBasePrice,
+      includedSeats,
+      minSeats,
+      formatEuro,
+      openSeatsDialog,
+      onSaveSeats,
     };
   },
 };

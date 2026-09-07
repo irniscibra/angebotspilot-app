@@ -26,7 +26,6 @@ class StripeController extends Controller
     {
         $request->validate([
             'plan' => 'required|in:starter,pro',
-            'quantity' => 'nullable|integer|min:1|max:100',
         ]);
 
         $company = $request->user()->company;
@@ -43,20 +42,17 @@ class StripeController extends Controller
             ], 500);
         }
 
-        // Starter wird pro Nutzer abgerechnet (Menge = Anzahl Sitzplätze,
-        // einmalig beim Checkout festgelegt). Pro ist ein fester
-        // Zusatzpreis unabhängig von der Nutzerzahl - daher hier bewusst
-        // immer Menge 1, unabhängig davon was im Request mitgeschickt wird.
-        $quantity = $request->plan === 'starter'
-            ? (int) $request->input('quantity', 1)
-            : 1;
-
+        // Beide Plaene starten immer mit Menge 1 (Basispreis pro Firma).
+        // Zusaetzliche Mitarbeiter-Sitzplaetze werden NICHT mehr hier beim
+        // Checkout mitgekauft, sondern jederzeit danach im Team-Bereich
+        // ueber updateSeats() als separate Abo-Position hinzugefuegt -
+        // einheitlich fuer Starter und Pro.
         try {
             $sessionParams = [
                 'mode' => 'subscription',
                 'line_items' => [[
                     'price' => $priceId,
-                    'quantity' => $quantity,
+                    'quantity' => 1,
                 ]],
                 'success_url' => $frontendUrl . '/#/settings?checkout=success',
                 'cancel_url' => $frontendUrl . '/#/upgrade?checkout=cancelled',
@@ -64,7 +60,6 @@ class StripeController extends Controller
                 'metadata' => [
                     'company_id' => $company->id,
                     'plan' => $request->plan,
-                    'quantity' => $quantity,
                 ],
             ];
 
@@ -93,6 +88,114 @@ class StripeController extends Controller
                 'message' => 'Checkout konnte nicht gestartet werden. Bitte versuchen Sie es erneut.',
             ], 500);
         }
+    }
+
+    /**
+     * Zusaetzliche Mitarbeiter-Sitzplaetze jederzeit im Team-Bereich
+     * anpassen (nicht nur beim initialen Checkout). $seats ist die
+     * GESAMTZAHL der gewuenschten zugekauften Sitzplaetze (on top der im
+     * Plan inkludierten) - analog zu Slack/GitHub "Sitzplatzkontingent auf
+     * X setzen" statt "einen dazu buchen", das ist robuster gegen
+     * Doppelklicks/Race-Conditions und einfacher zu testen als ein
+     * Inkrement-Endpoint. Preisaenderungen werden SOFORT abgerechnet (proration_behavior=always_invoice,
+     * nicht erst bei der naechsten reguleren Rechnung) - gaengige Praxis bei selbstbedienbarem
+     * Sitzplatz-Zukauf (Slack, GitHub etc.): der Kunde sieht die Belastung sofort, statt Monate
+     * spaeter einem unerklaerten hoeheren Betrag zu begegnen. Bei einer Reduzierung entsteht dadurch
+     * kein Rueckerstattungs-Vorgang, sondern ein Guthaben, das automatisch mit der naechsten
+     * Rechnung verrechnet wird (Stripe-Standard).
+     */
+    public function updateSeats(Request $request): JsonResponse
+    {
+        $request->validate([
+            'seats' => 'required|integer|min:0|max:50',
+        ]);
+
+        $company = $request->user()->company;
+        $seats = (int) $request->input('seats');
+
+        if (!$company->stripe_subscription_id) {
+            return response()->json([
+                'message' => 'Zusätzliche Sitzplätze sind erst nach Buchung eines Abos verfügbar.',
+            ], 422);
+        }
+
+        $included = Company::EMPLOYEE_SEATS_INCLUDED[$company->plan] ?? 0;
+        $newLimit = $included + $seats;
+        if ($company->activeEmployeeCount() > $newLimit) {
+            return response()->json([
+                'message' => 'Dazu müssten Sie zuerst Mitarbeiter aus dem Team entfernen - aktuell sind mehr aktive Mitarbeiter im Team, als die neue Anzahl an Sitzplätzen erlauben würde.',
+            ], 422);
+        }
+
+        $priceId = config('services.stripe.price_seat');
+        if (empty($priceId)) {
+            Log::error('Stripe: Keine Preis-ID fuer Zusatzsitzplaetze konfiguriert');
+            return response()->json([
+                'message' => 'Zusätzliche Sitzplätze sind aktuell nicht verfügbar. Bitte kontaktieren Sie uns.',
+            ], 500);
+        }
+
+        try {
+            $subscription = \Stripe\Subscription::retrieve($company->stripe_subscription_id);
+
+            $seatItem = null;
+            foreach ($subscription->items->data as $item) {
+                if ($item->price->id === $priceId) {
+                    $seatItem = $item;
+                    break;
+                }
+            }
+
+            if ($seats === 0) {
+                // Nur aufraeumen, falls tatsaechlich eine Sitzplatz-Position
+                // existiert - sonst gibt es nichts zu loeschen.
+                if ($seatItem) {
+                    \Stripe\Subscription::update($company->stripe_subscription_id, [
+                        'items' => [['id' => $seatItem->id, 'deleted' => true]],
+                        'proration_behavior' => 'always_invoice',
+                    ]);
+                }
+            } elseif ($seatItem) {
+                \Stripe\Subscription::update($company->stripe_subscription_id, [
+                    'items' => [['id' => $seatItem->id, 'quantity' => $seats]],
+                    'proration_behavior' => 'always_invoice',
+                ]);
+            } else {
+                \Stripe\Subscription::update($company->stripe_subscription_id, [
+                    'items' => [['price' => $priceId, 'quantity' => $seats]],
+                    'proration_behavior' => 'always_invoice',
+                ]);
+            }
+        } catch (\Exception $e) {
+            Log::error('Stripe: Sitzplatz-Anpassung fehlgeschlagen', [
+                'company_id' => $company->id,
+                'seats' => $seats,
+                'error' => $e->getMessage(),
+            ]);
+
+            return response()->json([
+                'message' => 'Sitzplätze konnten nicht angepasst werden. Bitte versuchen Sie es erneut.',
+            ], 500);
+        }
+
+        // Erst NACH erfolgreicher Stripe-Aenderung lokal speichern, damit
+        // wir nie einen Sitzplatz zeigen, der bei Stripe nicht auch
+        // tatsaechlich abgerechnet wird.
+        $company->update(['employee_seats_purchased' => $seats]);
+
+        Log::info('Stripe: Mitarbeiter-Sitzplaetze angepasst', [
+            'company_id' => $company->id,
+            'seats' => $seats,
+        ]);
+
+        return response()->json([
+            'seats' => [
+                'used' => $company->activeEmployeeCount(),
+                'limit' => $company->employeeSeatLimit(),
+                'purchased' => $seats,
+                'price_per_seat' => Company::SEAT_PRICE_EUR,
+            ],
+        ]);
     }
 
     /**
@@ -164,8 +267,8 @@ class StripeController extends Controller
         $currentPeriodEnd = null;
         try {
             $subscription = \Stripe\Subscription::retrieve($session->subscription);
-            $currentPeriodEnd = \Carbon\Carbon::createFromTimestamp($subscription->current_period_end);
-        } catch (\Exception $e) {
+            $currentPeriodEnd = $this->resolveCurrentPeriodEnd($subscription);
+        } catch (\Throwable $e) {
             Log::warning('Stripe: current_period_end konnte nicht geladen werden', [
                 'subscription_id' => $session->subscription,
                 'error' => $e->getMessage(),
@@ -185,8 +288,40 @@ class StripeController extends Controller
               Log::info('Stripe: Abo erfolgreich aktiviert', [
             'company_id' => $company->id,
             'plan' => $plan,
-            'quantity' => $session->metadata->quantity ?? null,
         ]);
+    }
+
+    /**
+     * Ermittelt das Ende der aktuellen Abrechnungsperiode robust.
+     *
+     * Aeltere Stripe-API-Versionen liefern "current_period_end" direkt auf
+     * der Subscription. Seit Stripes Umstellung auf "flexible billing mode"
+     * (relevant fuer uns, seit ein Abo durch die Sitzplatz-Zusatzposition
+     * mehrere Subscription-Items haben kann) steht das Feld dort nicht mehr
+     * zuverlaessig - dann liegt es nur noch auf dem jeweiligen Item. Diese
+     * Methode prueft beide Stellen und gibt bei Nichtverfuegbarkeit null
+     * zurueck, statt (wie zuvor) einen TypeError zu werfen, der die
+     * komplette Webhook-Verarbeitung samt Company-Update abgebrochen hat.
+     */
+    private function resolveCurrentPeriodEnd(object $subscription): ?\Carbon\Carbon
+    {
+        $timestamp = $subscription->current_period_end
+            ?? ($subscription->items->data[0]->current_period_end ?? null);
+
+        if (empty($timestamp)) {
+            return null;
+        }
+
+        try {
+            return \Carbon\Carbon::createFromTimestamp($timestamp);
+        } catch (\Throwable $e) {
+            Log::warning('Stripe: current_period_end konnte nicht in Carbon umgewandelt werden', [
+                'subscription_id' => $subscription->id ?? null,
+                'timestamp' => $timestamp,
+                'error' => $e->getMessage(),
+            ]);
+            return null;
+        }
     }
 
     /**
@@ -203,7 +338,7 @@ class StripeController extends Controller
             return;
         }
 
-           $currentPeriodEnd = \Carbon\Carbon::createFromTimestamp($subscription->current_period_end);
+        $currentPeriodEnd = $this->resolveCurrentPeriodEnd($subscription);
 
         // Wenn Stripe meldet, dass zum Periodenende gekündigt wird
         if ($subscription->cancel_at_period_end) {

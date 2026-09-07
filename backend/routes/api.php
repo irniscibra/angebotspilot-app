@@ -186,6 +186,9 @@ Route::get('/email-verify/{id}/{hash}', [EmailVerificationController::class, 've
     Route::post('team/invite', [TeamController::class, 'invite']);
     Route::delete('team/{user}', [TeamController::class, 'destroy']);
 
+    // Zusaetzliche Mitarbeiter-Sitzplaetze jederzeit dazubuchen (Starter + Pro)
+    Route::put('billing/seats', [StripeController::class, 'updateSeats']);
+
     // Firmenweite Zeituebersicht (alle Projekte, fuer Lohnabrechnung)
     Route::get('time-entries', [TimeEntryController::class, 'companyIndex']);
 

@@ -43,6 +43,8 @@ class TeamController extends Controller
             'seats' => [
                 'used' => $company->activeEmployeeCount(),
                 'limit' => $company->employeeSeatLimit(),
+                'purchased' => (int) $company->employee_seats_purchased,
+                'price_per_seat' => \App\Models\Company::SEAT_PRICE_EUR,
             ],
         ]);
     }

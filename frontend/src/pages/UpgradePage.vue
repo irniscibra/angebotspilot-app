@@ -9,7 +9,7 @@
           {{ authStore.trialExpired ? 'Ihr Testzeitraum ist abgelaufen' : 'Jetzt upgraden' }}
         </div>
         <div class="upgrade-subtitle">
-          Voller Zugriff auf alle Features – fair berechnet pro Nutzer.
+          Voller Zugriff auf alle Features – ein transparenter Preis pro Firma.
         </div>
         <q-chip
           v-if="authStore.trialExpired"
@@ -40,37 +40,13 @@
             <span class="price-amount">39</span>
             <span class="price-currency">€</span>
             <div class="price-right">
-              <div class="price-period">pro Nutzer / Monat</div>
+              <div class="price-period">pro Firma / Monat</div>
               <div class="price-note">Gemäß §19 UStG ohne MwSt. · monatlich kündbar</div>
             </div>
           </div>
 
-          <div class="qty-selector">
-            <span class="qty-label">Anzahl Nutzer</span>
-            <div class="qty-stepper">
-              <q-btn
-                round
-                dense
-                flat
-                icon="remove"
-                text-color="white"
-                @click="decrementQty"
-                :disable="quantity <= 1"
-              />
-              <span class="qty-value">{{ quantity }}</span>
-              <q-btn
-                round
-                dense
-                flat
-                icon="add"
-                text-color="white"
-                @click="incrementQty"
-              />
-            </div>
-          </div>
-
-                   <div class="qty-total">
-            Monatlich gesamt: <strong>{{ totalPrice }} €</strong>
+          <div class="seat-note">
+            + Mitarbeiter-Sitzplätze ab 9,99 € / Monat – jederzeit im Team-Bereich dazu buchbar
           </div>
 
           <q-separator dark class="q-my-lg" />
@@ -120,6 +96,10 @@
               <div class="price-period">pro Firma / Monat</div>
               <div class="price-note">Gemäß §19 UStG ohne MwSt. · monatlich kündbar</div>
             </div>
+          </div>
+
+          <div class="seat-note">
+            2 Mitarbeiter-Sitzplätze inklusive, weitere ab 9,99 € / Monat – jederzeit im Team-Bereich dazu buchbar
           </div>
 
           <q-separator dark class="q-my-lg" />
@@ -214,7 +194,7 @@
 </template>
 
 <script setup>
-import { ref, computed } from 'vue'
+import { ref } from 'vue'
 import { useAuthStore } from 'src/stores/auth'
 import { useQuasar } from 'quasar'
 import { api } from 'src/boot/axios'
@@ -222,30 +202,14 @@ import { api } from 'src/boot/axios'
 const authStore = useAuthStore()
 const $q = useQuasar()
 
-const quantity = ref(1)
 const checkoutLoading = ref(false)
 const checkoutLoadingPro = ref(false)
-
-const totalPrice = computed(() =>
-  (quantity.value * 39).toLocaleString('de-DE', {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  })
-)
-
-function incrementQty() {
-  quantity.value++
-}
-function decrementQty() {
-  if (quantity.value > 1) quantity.value--
-}
 
 async function subscribe() {
   checkoutLoading.value = true
   try {
     const res = await api.post('/stripe/checkout', {
       plan: 'starter',
-      quantity: quantity.value,
     })
     window.location.href = res.data.checkout_url
   } catch (e) {
@@ -425,37 +389,11 @@ async function subscribePro() {
 }
 .contact-box a { color: #1d4ed8; font-weight: 600; text-decoration: none; }
 
-.qty-selector {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-top: 20px;
-}
-.qty-label {
-  font-size: 14px;
+.seat-note {
+  font-size: 13px;
   color: rgba(255, 255, 255, 0.85);
-  font-weight: 600;
-}
-.qty-stepper {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  background: rgba(255, 255, 255, 0.1);
-  border-radius: 10px;
-  padding: 2px 8px;
-}
-.qty-value {
-  font-size: 16px;
-  font-weight: 700;
-  color: white;
-  min-width: 24px;
-  text-align: center;
-}
-.qty-total {
-  font-size: 14px;
-  color: rgba(255, 255, 255, 0.9);
-  margin-top: 12px;
-  text-align: right;
+  margin-top: 14px;
+  line-height: 1.4;
 }
 
 .pricing-center--two {

@@ -4,7 +4,7 @@ import { api } from "src/boot/axios";
 export const useTeamStore = defineStore("team", {
   state: () => ({
     members: [],
-    seats: { used: 0, limit: 0 },
+    seats: { used: 0, limit: 0, purchased: 0, price_per_seat: 0 },
     loading: false,
     saving: false,
     error: null,
@@ -67,6 +67,21 @@ export const useTeamStore = defineStore("team", {
         this.members = this.members.filter((m) => m.id !== userId);
       } catch (err) {
         throw err;
+      }
+    },
+
+    // Zusaetzliche Mitarbeiter-Sitzplaetze jederzeit anpassen (Starter + Pro).
+    // seats = GESAMTZAHL der gewuenschten zugekauften Sitzplaetze (nicht ein Delta).
+    async updateSeats(seats) {
+      this.saving = true;
+      try {
+        const response = await api.put("/billing/seats", { seats });
+        this.seats = response.data.seats;
+        return response.data.seats;
+      } catch (err) {
+        throw err;
+      } finally {
+        this.saving = false;
       }
     },
   },
