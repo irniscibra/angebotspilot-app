@@ -344,6 +344,28 @@
             background: #fef9c3;
             color: #854d0e;
         }
+        .badge-flat {
+            background: #f3e8ff;
+            color: #6b21a8;
+        }
+        .badge-heading {
+            background: #e0e7ff;
+            color: #3730a3;
+        }
+        .heading-row td {
+            background: #eef2ff !important;
+        }
+        .heading-row .item-title {
+            text-transform: uppercase;
+            letter-spacing: 0.3px;
+            font-size: 8pt;
+        }
+        .child-row .item-title {
+            padding-left: 10px;
+        }
+        .child-row .pos-nr {
+            padding-left: 10px;
+        }
         .text-right { text-align: right; }
         .text-center { text-align: center; }
         .amount {
@@ -640,15 +662,50 @@
 
     <!-- POSITIONEN -->
     <div style="padding: 0 20px;">
-    @php $posNr = 1; @endphp
 
+    @php $groupCounter = 0; @endphp
     @foreach($groupedItems as $groupName => $items)
+        @php $groupCounter++; @endphp
         <!-- Gruppen Header -->
         <div class="group-header">
             <div class="group-header-bar"></div>
-            <div class="group-header-content">{{ $groupName ?: 'Positionen' }}</div>
+            <div class="group-header-content">{{ $groupCounter }}. {{ $groupName ?: 'Positionen' }}</div>
         </div>
 
+        @php
+            // VOB-Hierarchie innerhalb der Gruppe aufbauen: Überschriften
+            // (type='text') zuerst, direkt gefolgt von ihren Unterpositionen.
+            // Die Gruppen-Nummer (siehe Header oben) ist die einzige Stelle, die
+            // Gruppen nummeriert — Unterpositionen erben sie als "N.1", "N.2" ...,
+            // damit Gruppenüberschrift und Positionsnummern nie auseinanderlaufen.
+            // Überschriften-Zeilen selbst bekommen keine eigene Positionsnummer
+            // mehr (redundant zur Gruppen-Nummer im Header), einfache Positionen
+            // ohne Überschrift (kein VOB-Wunsch) bleiben schlicht 1, 2, 3 ...
+            $itemsById = $items->keyBy('id');
+            $rootItems = $items->filter(function ($i) use ($itemsById) {
+                return !$i->parent_id || !$itemsById->has($i->parent_id);
+            });
+            $rootCounter = 0;
+            $renderRows = collect();
+            foreach ($rootItems as $root) {
+                $rootCounter++;
+                $isHeading = $root->type === 'text';
+                $renderRows->push(['item' => $root, 'label' => $isHeading ? '' : (string) $rootCounter, 'isChild' => false]);
+                if ($isHeading) {
+                    $childCounter = 0;
+                    foreach ($items->where('parent_id', $root->id) as $child) {
+                        $childCounter++;
+                        $renderRows->push(['item' => $child, 'label' => $groupCounter . '.' . $childCounter, 'isChild' => true]);
+                    }
+                }
+            }
+            $badgeMap = [
+                'material' => ['badge-material', 'Material'],
+                'labor' => ['badge-labor', 'Arbeit'],
+                'flat' => ['badge-flat', 'Pauschal'],
+                'text' => ['badge-heading', 'Überschrift'],
+            ];
+        @endphp
         <table class="items-table">
             <thead>
                 <tr>
@@ -661,15 +718,31 @@
                 </tr>
             </thead>
             <tbody>
-                @foreach($items as $item)
-                <tr>
-                    <td><span class="pos-nr">{{ str_pad($posNr++, 2, '0', STR_PAD_LEFT) }}</span></td>
+                @foreach($renderRows as $row)
+                @php
+                    $item = $row['item'];
+                    [$badgeClass, $badgeLabel] = $badgeMap[$item->type] ?? ['badge-labor', $item->type];
+                @endphp
+                @if($item->type === 'text')
+                <tr class="heading-row">
+                    <td><span class="pos-nr">{{ $row['label'] }}</span></td>
+                    <td colspan="5">
+                        <div class="item-title">
+                            {{ $item->title }}
+                            <span class="type-badge {{ $badgeClass }}">{{ $badgeLabel }}</span>
+                        </div>
+                        @if($item->description)
+                            <div class="item-desc">{{ Str::limit($item->description, 180) }}</div>
+                        @endif
+                    </td>
+                </tr>
+                @else
+                <tr class="{{ $row['isChild'] ? 'child-row' : '' }}">
+                    <td><span class="pos-nr">{{ $row['label'] }}</span></td>
                     <td>
                         <div class="item-title">
                             {{ $item->title }}
-                            <span class="type-badge {{ $item->type === 'material' ? 'badge-material' : 'badge-labor' }}">
-                                {{ $item->type === 'material' ? 'Material' : 'Arbeit' }}
-                            </span>
+                            <span class="type-badge {{ $badgeClass }}">{{ $badgeLabel }}</span>
                         </div>
                         @if($item->description)
                             <div class="item-desc">{{ Str::limit($item->description, 180) }}</div>
@@ -682,6 +755,7 @@
                     <td class="text-right">{{ number_format($item->unit_price, 2, ',', '.') }}&nbsp;€</td>
                     <td class="text-right"><span class="amount">{{ number_format($item->total_price, 2, ',', '.') }}&nbsp;€</span></td>
                 </tr>
+                @endif
                 @endforeach
             </tbody>
         </table>

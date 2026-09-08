@@ -98,9 +98,9 @@
       </div>
 
       <!-- Positionen -->
-      <div v-for="(items, groupName) in groupedItems" :key="groupName" style="margin-bottom: 16px;">
+      <div v-for="(items, groupName, groupIdx) in groupedItems" :key="groupName" style="margin-bottom: 16px;">
         <div :style="`background: ${company.primary_color}10; border-left: 4px solid ${company.primary_color}; padding: 10px 16px; border-radius: 0 8px 0 0; font-size: 13px; font-weight: 700; color: ${company.primary_color};`">
-          {{ groupName || 'Positionen' }}
+          {{ groupIdx + 1 }}. {{ groupName || 'Positionen' }}
         </div>
         <div style="background: #ffffff; border-radius: 0 0 12px 12px; box-shadow: 0 1px 4px rgba(0,0,0,0.06); overflow: hidden;">
           <!-- Tabellen Header -->
@@ -115,16 +115,22 @@
           <div
             v-for="(item, i) in items"
             :key="item.id"
-            :style="`display: grid; grid-template-columns: 1fr 80px 70px 100px 110px; gap: 8px; padding: 12px 16px; border-bottom: 1px solid #f1f5f9; ${i % 2 === 1 ? 'background: #fafafa;' : ''}`"
+            :style="`display: grid; grid-template-columns: 1fr 80px 70px 100px 110px; gap: 8px; padding: 12px 16px; border-bottom: 1px solid #f1f5f9; ${item.type === 'text' ? `background: ${company.primary_color}0d;` : (i % 2 === 1 ? 'background: #fafafa;' : '')}`"
           >
             <div>
-              <div style="font-size: 13px; font-weight: 600; color: #0f172a;">{{ item.title }}</div>
+              <div
+                :style="item.type === 'text'
+                  ? 'font-size: 13px; font-weight: 700; color: #0f172a; text-transform: uppercase; letter-spacing: 0.03em;'
+                  : 'font-size: 13px; font-weight: 600; color: #0f172a;'"
+              >
+                <span v-if="item._posLabel" style="color: #94a3b8; margin-right: 4px;">{{ item._posLabel }}</span>{{ item.title }}
+              </div>
               <div v-if="item.description" style="font-size: 11px; color: #94a3b8; margin-top: 2px; line-height: 1.4;">{{ item.description }}</div>
             </div>
-            <div style="text-align: right; font-size: 13px; color: #475569; padding-top: 2px;">{{ formatNum(item.quantity) }}</div>
-            <div style="text-align: center; font-size: 13px; color: #64748b; padding-top: 2px;">{{ item.unit }}</div>
-            <div style="text-align: right; font-size: 13px; color: #475569; padding-top: 2px;">{{ formatPrice(item.unit_price) }} €</div>
-            <div style="text-align: right; font-size: 13px; font-weight: 600; color: #0f172a; padding-top: 2px;">{{ formatPrice(item.total_price) }} €</div>
+            <div style="text-align: right; font-size: 13px; color: #475569; padding-top: 2px;">{{ item.type !== 'text' ? formatNum(item.quantity) : '' }}</div>
+            <div style="text-align: center; font-size: 13px; color: #64748b; padding-top: 2px;">{{ item.type !== 'text' ? item.unit : '' }}</div>
+            <div style="text-align: right; font-size: 13px; color: #475569; padding-top: 2px;">{{ item.type !== 'text' ? formatPrice(item.unit_price) + ' €' : '' }}</div>
+            <div style="text-align: right; font-size: 13px; font-weight: 600; color: #0f172a; padding-top: 2px;">{{ item.type !== 'text' ? formatPrice(item.total_price) + ' €' : '' }}</div>
           </div>
         </div>
       </div>
@@ -274,6 +280,43 @@ export default {
 
     const uuid = route.params.uuid
 
+    // Baut aus den flachen, servergruppierten Positionen dieselbe VOB-Hierarchie
+    // (Überschriften + nummerierte Unterpositionen) wie im PDF und in der
+    // Angebots-Bearbeitung, damit der Kunde beim Ansehen/Unterschreiben nicht
+    // eine "Überschriften"-Position wie eine normale 0,00-€-Position sieht.
+    const buildHierarchy = (rawGrouped) => {
+      const result = {}
+      Object.keys(rawGrouped || {}).forEach((gr, groupIdx) => {
+        const groupItems = rawGrouped[gr]
+        const byId = {}
+        groupItems.forEach((i) => (byId[i.id] = i))
+        const roots = groupItems.filter((i) => !i.parent_id || !byId[i.parent_id])
+        const ordered = []
+        let rootIndex = 0
+        roots.forEach((root) => {
+          rootIndex += 1
+          const isHeading = root.type === 'text'
+          ordered.push({
+            ...root,
+            _isChild: false,
+            _posLabel: isHeading ? '' : String(rootIndex),
+          })
+          if (isHeading) {
+            const children = groupItems.filter((i) => i.parent_id === root.id)
+            children.forEach((child, childIndex) => {
+              ordered.push({
+                ...child,
+                _isChild: true,
+                _posLabel: `${groupIdx + 1}.${childIndex + 1}`,
+              })
+            })
+          }
+        })
+        result[gr] = ordered
+      })
+      return result
+    }
+
     // Angebot laden
     const loadQuote = async () => {
       try {
@@ -281,7 +324,7 @@ export default {
         quote.value = res.data.quote
         company.value = res.data.company
         customer.value = res.data.customer
-        groupedItems.value = res.data.grouped_items
+        groupedItems.value = buildHierarchy(res.data.grouped_items)
       } catch (e) {
         if (e.response?.status === 410) {
           error.value = e.response?.data?.error || 'Dieses Angebot ist abgelaufen oder nicht mehr verfügbar.'

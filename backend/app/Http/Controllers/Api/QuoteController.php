@@ -228,12 +228,17 @@ class QuoteController extends Controller
             'unit' => 'required|string|max:20',
             'unit_price' => 'required|numeric|min:0',
             'material_id' => 'nullable|exists:materials,id',
+            'parent_id' => 'nullable|integer',
+            'include_in_setup_costs' => 'sometimes|boolean',
         ]);
+
+        $parentId = $this->resolveValidParentId($quote, $request->parent_id, $request->type);
 
         $lastPosition = $quote->items()->max('position_number') ?? 0;
 
         $item = QuoteItem::create([
             'quote_id' => $quote->id,
+            'parent_id' => $parentId,
             'position_number' => $lastPosition + 1,
             'group_name' => $request->group_name,
             'type' => $request->type,
@@ -245,9 +250,32 @@ class QuoteController extends Controller
             'is_ai_generated' => false,
             'sort_order' => $lastPosition + 1,
             'material_id' => $request->material_id,
+            'include_in_setup_costs' => $request->boolean('include_in_setup_costs'),
         ]);
 
         return response()->json($item, 201);
+    }
+
+    /**
+     * Prüft und liefert eine gültige parent_id für eine VOB-Unterposition:
+     * - muss zum selben Angebot gehören
+     * - das Elternteil muss selbst Typ "text" sein (reine Überschrift)
+     * - das Elternteil darf selbst keine Unterposition sein (max. 2 Ebenen)
+     * - eine Überschrift ("text") kann selbst keine Unterposition sein
+     */
+    private function resolveValidParentId(Quote $quote, $parentId, string $type): ?int
+    {
+        if (!$parentId || $type === 'text') {
+            return null;
+        }
+
+        $parent = $quote->items()->find($parentId);
+
+        if (!$parent || $parent->type !== 'text' || $parent->parent_id !== null) {
+            return null;
+        }
+
+        return $parent->id;
     }
 
     /**
@@ -264,11 +292,38 @@ class QuoteController extends Controller
             'unit' => 'sometimes|string|max:20',
             'unit_price' => 'sometimes|numeric|min:0',
             'group_name' => 'sometimes|string|max:100',
+            'type' => 'sometimes|in:material,labor,flat,text',
+            'parent_id' => 'nullable|integer',
+            'include_in_setup_costs' => 'sometimes|boolean',
         ]);
 
-        $item->update($request->only([
-            'title', 'description', 'quantity', 'unit', 'unit_price', 'group_name',
-        ]));
+        $data = $request->only([
+            'title', 'description', 'quantity', 'unit', 'unit_price', 'group_name', 'type',
+        ]);
+
+        if ($request->has('include_in_setup_costs')) {
+            $data['include_in_setup_costs'] = $request->boolean('include_in_setup_costs');
+        }
+
+        if ($request->has('parent_id')) {
+            $newType = $request->input('type', $item->type);
+            $data['parent_id'] = $this->resolveValidParentId($quote, $request->parent_id, $newType);
+        }
+
+        $oldType = $item->type;
+        $finalType = $data['type'] ?? $oldType;
+
+        if ($finalType === 'text') {
+            // Überschriften können selbst keine Unterposition sein.
+            $data['parent_id'] = null;
+        } elseif ($oldType === 'text' && $finalType !== 'text') {
+            // Diese Position war eine Überschrift und ist es nicht mehr ->
+            // ihre bisherigen Unterpositionen verlieren den (jetzt ungültigen)
+            // Elternteil und werden zu eigenständigen Positionen.
+            $item->children()->update(['parent_id' => null]);
+        }
+
+        $item->update($data);
 
         return response()->json($item);
     }

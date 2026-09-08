@@ -81,6 +81,7 @@ class PublicQuoteController extends Controller
             ] : null,
             'grouped_items' => $groupedItems->map(fn($items) => $items->map(fn($item) => [
                 'id'          => $item->id,
+                'parent_id'   => $item->parent_id,
                 'title'       => $item->title,
                 'description' => $item->description,
                 'type'        => $item->type,

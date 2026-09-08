@@ -1447,7 +1447,7 @@
       <div class="row q-col-gutter-lg">
         <div class="col-12 col-md-8">
           <div
-            v-for="(items, groupName) in groupedItems"
+            v-for="(items, groupName, groupIdx) in groupedItems"
             :key="groupName"
             class="q-mb-md"
           >
@@ -1461,34 +1461,34 @@
                 color: #64748b;
               "
             >
-              {{ groupName }}
+              {{ groupIdx + 1 }}. {{ groupName }}
             </p>
             <q-card
               v-for="item in items"
               :key="item.id"
               flat
               class="q-mb-xs"
-              style="
-                border: 1px solid #e2e8f0;
-                border-radius: 10px;
-                background: #ffffff;
-              "
+              :style="itemCardStyle(item)"
             >
               <q-card-section class="q-py-sm q-px-md">
                 <div class="row items-center q-gutter-sm">
                   <div class="col">
                     <div
-                      style="
-                        font-size: 13.5px;
-                        font-weight: 500;
-                        color: #0f172a;
+                      :style="
+                        item.type === 'text'
+                          ? 'font-size: 13.5px; font-weight: 700; color: #3730a3; text-transform: uppercase;'
+                          : 'font-size: 13.5px; font-weight: 500; color: #0f172a;'
                       "
                     >
-                      {{ item.title }}
+                      <span
+                        v-if="item._posLabel"
+                        style="color: #94a3b8; margin-right: 4px"
+                        >{{ item._posLabel }}</span
+                      >{{ item.title }}
                     </div>
                     <q-badge
-                      :color="item.type === 'material' ? 'blue' : 'orange'"
-                      :label="item.type === 'material' ? 'Material' : 'Arbeit'"
+                      :color="itemTypeMeta(item).color"
+                      :label="itemTypeMeta(item).label"
                       dense
                       class="q-mt-xs"
                       style="font-size: 10px"
@@ -1502,29 +1502,31 @@
                       style="font-size: 10px"
                     />
                   </div>
-                  <div
-                    class="text-center"
-                    style="min-width: 60px; font-size: 13px; color: #475569"
-                  >
-                    {{ item.quantity }} {{ item.unit }}
-                  </div>
-                  <div
-                    class="text-right"
-                    style="min-width: 80px; font-size: 13px; color: #475569"
-                  >
-                    {{ formatPrice(item.unit_price) }} €
-                  </div>
-                  <div
-                    class="text-right"
-                    style="
-                      min-width: 90px;
-                      font-weight: 600;
-                      font-size: 13px;
-                      color: #0f172a;
-                    "
-                  >
-                    {{ formatPrice(item.quantity * item.unit_price) }} €
-                  </div>
+                  <template v-if="item.type !== 'text'">
+                    <div
+                      class="text-center"
+                      style="min-width: 60px; font-size: 13px; color: #475569"
+                    >
+                      {{ item.quantity }} {{ item.unit }}
+                    </div>
+                    <div
+                      class="text-right"
+                      style="min-width: 80px; font-size: 13px; color: #475569"
+                    >
+                      {{ formatPrice(item.unit_price) }} €
+                    </div>
+                    <div
+                      class="text-right"
+                      style="
+                        min-width: 90px;
+                        font-weight: 600;
+                        font-size: 13px;
+                        color: #0f172a;
+                      "
+                    >
+                      {{ formatPrice(item.quantity * item.unit_price) }} €
+                    </div>
+                  </template>
                 </div>
               </q-card-section>
             </q-card>
@@ -1920,8 +1922,77 @@ export default {
         if (!g[gr]) g[gr] = [];
         g[gr].push(i);
       });
-      return g;
+
+      // Innerhalb jeder Gruppe: VOB-Hierarchie aufbauen. Überschriften
+      // (type='text') zuerst, direkt gefolgt von ihren Unterpositionen
+      // (parent_id -> Überschrift), mit "1", "1.1", "2" ... Nummerierung.
+      const result = {};
+      Object.keys(g).forEach((gr, groupIdx) => {
+        const groupItems = g[gr];
+        const byId = {};
+        groupItems.forEach((i) => (byId[i.id] = i));
+        const roots = groupItems.filter(
+          (i) => !i.parent_id || !byId[i.parent_id],
+        );
+        const ordered = [];
+        let rootIndex = 0;
+        roots.forEach((root) => {
+          rootIndex += 1;
+          const isHeading = root.type === "text";
+          ordered.push({
+            ...root,
+            _isChild: false,
+            // Überschriften bekommen keine eigene Positionsnummer mehr — die
+            // Gruppen-Nummer im Header (siehe Template) identifiziert sie
+            // bereits eindeutig. Einfache Positionen ohne Überschrift bleiben
+            // schlicht 1, 2, 3 ... wie bisher.
+            _posLabel: isHeading ? "" : String(rootIndex),
+          });
+          if (isHeading) {
+            const children = groupItems.filter((i) => i.parent_id === root.id);
+            children.forEach((child, childIndex) => {
+              ordered.push({
+                ...child,
+                _isChild: true,
+                // Unterpositionen erben die Gruppen-Nummer (1-basiert), NICHT
+                // einen separaten, per-Gruppe zurückgesetzten Zähler — so
+                // stimmt "2.1" in der Liste immer mit "2. Gruppenname" im
+                // Header überein, egal wie viele Überschriften die Gruppe hat.
+                _posLabel: `${groupIdx + 1}.${childIndex + 1}`,
+              });
+            });
+          }
+        });
+        result[gr] = ordered;
+      });
+      return result;
     });
+
+    const itemTypeMeta = (item) => {
+      switch (item.type) {
+        case "material":
+          return { color: "blue", label: "Material" };
+        case "labor":
+          return { color: "orange", label: "Arbeit" };
+        case "flat":
+          return { color: "purple", label: "Pauschal" };
+        case "text":
+          return { color: "grey-7", label: "Überschrift" };
+        default:
+          return { color: "grey", label: item.type };
+      }
+    };
+
+    const itemCardStyle = (item) => {
+      const base =
+        item.type === "text"
+          ? "background: #eef2ff; border: 1px solid #c7d2fe;"
+          : "background: #ffffff; border: 1px solid #e2e8f0;";
+      const indent = item._isChild
+        ? "margin-left: 22px; border-left: 3px solid #94a3b8;"
+        : "";
+      return `${base} border-radius: 10px; ${indent}`;
+    };
 
     const formatPrice = (val) =>
       Number(val || 0).toLocaleString("de-DE", {
@@ -2394,6 +2465,8 @@ export default {
       emptyTitle,
       itemCount,
       groupedItems,
+      itemTypeMeta,
+      itemCardStyle,
       formatPrice,
       filterCustomers,
       onGenerate,

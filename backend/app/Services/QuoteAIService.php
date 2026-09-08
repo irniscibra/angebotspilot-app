@@ -271,7 +271,7 @@ REGELN FÜR DIE KALKULATION:
    nach, ob deine Summe exakt mit Menge × genanntem Preis übereinstimmt,
    bevor du antwortest.
 1. Gliedere das Angebot in logische Gewerke-Gruppen (z.B. "Demontage & Entsorgung", "Sanitärinstallation", "Rohrleitungen", "Heizungsarbeiten", etc.)
-2. Trenne IMMER Material und Arbeitsleistung als separate Positionen
+2. Trenne IMMER Material und Arbeitsleistung als separate Positionen. WICHTIG: Wenn Material- und Arbeitsposition zum selben Arbeitsschritt gehören, müssen sich ihre Titel klar unterscheiden (z.B. "Schalung und Bewehrung – Material" und "Schalung und Bewehrung – Einbau"), NIEMALS zwei Positionen mit exakt demselben Titel — der Kunde muss auf den ersten Blick erkennen können, welche Position was ist.
 3. Kalkuliere realistische Mengen und Preise für den deutschen Markt (Stand 2026) 
 4. Verwende marktübliche Markenmaterialien (Grohe, Hansgrohe, Viega, Geberit, Buderus, Vaillant etc.)
 5. Plane eine Kleinmaterial-Pauschale ein (5-8% der Materialkosten) NUR für wirklich
@@ -334,7 +334,7 @@ ANTWORTE AUSSCHLIESSLICH als valides JSON in exakt diesem Format:
     "project_title": "Kurzer, professioneller Projekttitel",
     "groups": [
         {
-            "name": "1. Gruppenname",
+            "name": "Gruppenname (OHNE Nummer davor, z.B. Betonarbeiten nicht 1. Betonarbeiten)",
             "items": [
                 {
                     "type": "material",
@@ -366,8 +366,20 @@ ANTWORTE AUSSCHLIESSLICH als valides JSON in exakt diesem Format:
 WICHTIG:
 - Einheiten nur: "Stück", "Meter", "m²", "m³", "Std", "pauschal", "Liter", "kg"
 - Preise sind NETTO (ohne MwSt)
-- Jede Position muss "type" haben: "material" oder "labor"
-- Gruppen nummerieren: "1. ...", "2. ...", etc.
+- Jede Position muss "type" haben: "material", "labor", "flat" oder "text"
+  - "flat": EIN Pauschalpreis für Material+Arbeit zusammen (Menge meist 1, Einheit "pauschal") — nur
+    verwenden, wenn eine Komplettpauschale klar sinnvoller ist als eine getrennte Aufschlüsselung
+    (z.B. wenn der Kunde ausdrücklich "Komplettpreis" oder "alles inklusive, ein Preis" wünscht).
+  - "text": reine Überschrift/Gliederungs-Position OHNE eigenen Preis (quantity=0, unit_price=0,
+    unit="-"). NUR verwenden, wenn die Projektbeschreibung AUSDRÜCKLICH eine gegliederte/nummerierte
+    Struktur mit Haupt- und Unterpositionen verlangt (Formulierungen wie "Unterpositionen", "gegliedert
+    in Pos. 1.1", "VOB-Struktur", "Hauptposition mit Unterpunkten"). Ist das der Fall: setze als
+    ERSTES Element der betroffenen Gruppe eine "text"-Position (Titel = grobe Sammelüberschrift, z.B.
+    "Betonarbeiten"), gefolgt von den zugehörigen Unterpositionen (type material/labor/flat) direkt
+    danach in DERSELBEN Gruppe — diese werden dann automatisch als "1.1", "1.2" etc. dieser Überschrift
+    zugeordnet. OHNE ausdrücklichen Wunsch NIEMALS "text" verwenden — Standard bleibt die einfache
+    Gruppenaufteilung ohne Unterpositionen, wie im Beispiel oben.
+- Gruppennamen OHNE führende Nummer schreiben (z.B. "Betonarbeiten", nicht "1. Betonarbeiten") — die Nummerierung der Gruppen/Positionen übernimmt die Anwendung automatisch.
 - Mindestens 2 Gruppen, realistisch detailliert
 - Bei jedem Material "sku" und "from_catalog" angeben
 - Bei Katalog-Artikeln: EXAKTE Artikelnummer und EXAKTEN Preis verwenden!
@@ -404,14 +416,21 @@ PROMPT;
         $matchLog = [];
 
         foreach ($groups as $group) {
+            // Innerhalb einer Gruppe kann die KI optional eine "text"-Position
+            // als Überschrift setzen (siehe Prompt) — alle folgenden Positionen
+            // derselben Gruppe werden dann bis zur naechsten "text"-Position
+            // (oder Gruppenende) automatisch dieser Überschrift zugeordnet.
+            $currentTextParentId = null;
+
             foreach ($group['items'] as $item) {
-                $unitPrice = $item['unit_price'] ?? 0;
+                $itemType = $item['type'] ?? 'material';
+                $unitPrice = $itemType === 'text' ? 0 : ($item['unit_price'] ?? 0);
                 $materialId = null;
                 $matchedMaterial = null;
                 $matchMethod = 'none';
 
                 // Nur für Material-Positionen matchen
-                if (($item['type'] ?? 'material') === 'material') {
+                if ($itemType === 'material') {
                     $result = $this->findCatalogMatch($item, $allMaterials, $bysku);
                     $matchedMaterial = $result['material'];
                     $matchMethod = $result['method'];
@@ -453,21 +472,32 @@ PROMPT;
                     );
                 }
 
-                QuoteItem::create([
+                $quantity = $itemType === 'text' ? 0 : ($item['quantity'] ?? 1);
+                $unit = $itemType === 'text' ? '-' : ($matchedMaterial ? $matchedMaterial->unit : ($item['unit'] ?? 'Stück'));
+
+                $newItem = QuoteItem::create([
                     'quote_id' => $quote->id,
+                    'parent_id' => $itemType === 'text' ? null : $currentTextParentId,
                     'position_number' => $position++,
                     'group_name' => $group['name'],
-                    'type' => $item['type'] ?? 'material',
+                    'type' => $itemType,
                     'title' => $matchedMaterial ? $matchedMaterial->name : $item['title'],
                     'description' => $description,
-                    'quantity' => $item['quantity'] ?? 1,
-                    'unit' => $matchedMaterial ? $matchedMaterial->unit : ($item['unit'] ?? 'Stück'),
+                    'quantity' => $quantity,
+                    'unit' => $unit,
                     'unit_price' => $unitPrice,
-                    'total_price' => ($item['quantity'] ?? 1) * $unitPrice,
+                    'total_price' => $quantity * $unitPrice,
                     'is_ai_generated' => true,
                     'sort_order' => $sortOrder++,
                     'material_id' => $materialId,
                 ]);
+
+                // Eine neue "text"-Position wird zur Überschrift für alle
+                // nachfolgenden Positionen dieser Gruppe, bis die naechste
+                // "text"-Position kommt.
+                if ($itemType === 'text') {
+                    $currentTextParentId = $newItem->id;
+                }
             }
         }
 

@@ -369,7 +369,7 @@
               </div>
 
               <div
-                v-for="(items, groupName) in groupedItems"
+                v-for="(items, groupName, groupIdx) in groupedItems"
                 :key="groupName"
                 class="q-mb-md"
               >
@@ -384,18 +384,14 @@
                     letter-spacing: 0.04em;
                   "
                 >
-                  {{ groupName }}
+                  {{ groupIdx + 1 }}. {{ groupName }}
                 </div>
                 <q-card
                   v-for="item in items"
                   :key="item.id"
                   flat
                   class="q-mb-xs"
-                  style="
-                    background: #f8fafc;
-                    border: 1px solid #f1f5f9;
-                    border-radius: 10px;
-                  "
+                  :style="itemCardStyle(item)"
                 >
                   <q-card-section class="q-py-sm q-px-sm">
                     <!-- Mobile Layout: gestapelt -->
@@ -404,20 +400,32 @@
                         <div class="col">
                           <div class="row items-center q-gutter-xs q-mb-xs">
                             <span
+                              v-if="item._posLabel"
                               style="
-                                font-size: 13px;
-                                font-weight: 600;
-                                color: #0f172a;
+                                font-size: 11px;
+                                font-weight: 700;
+                                color: #94a3b8;
+                              "
+                              >{{ item._posLabel }}</span
+                            >
+                            <span
+                              :style="
+                                item.type === 'text'
+                                  ? 'font-size: 13px; font-weight: 700; color: #3730a3; text-transform: uppercase; letter-spacing: 0.03em;'
+                                  : 'font-size: 13px; font-weight: 600; color: #0f172a;'
                               "
                               >{{ item.title }}</span
                             >
                             <q-badge
-                              :color="
-                                item.type === 'material' ? 'blue' : 'orange'
-                              "
-                              :label="
-                                item.type === 'material' ? 'Material' : 'Arbeit'
-                              "
+                              :color="itemTypeMeta(item).color"
+                              :label="itemTypeMeta(item).label"
+                              dense
+                              style="font-size: 10px"
+                            />
+                            <q-badge
+                              v-if="item.include_in_setup_costs"
+                              color="teal-7"
+                              label="Baustelleneinr."
                               dense
                               style="font-size: 10px"
                             />
@@ -429,6 +437,7 @@
                               style="font-size: 10px"
                             />
                             <q-icon
+                              v-if="item.type !== 'text'"
                               :name="
                                 item.unit_price > 0 ? 'check_circle' : 'error'
                               "
@@ -451,17 +460,28 @@
                             {{ item.description }}
                           </div>
                         </div>
-                        <q-btn
-                          flat
-                          round
-                          dense
-                          icon="close"
-                          color="negative"
-                          size="sm"
-                          @click="onDeleteItem(item)"
-                        />
+                        <div class="row q-gutter-xs">
+                          <q-btn
+                            flat
+                            round
+                            dense
+                            icon="edit"
+                            color="grey-7"
+                            size="sm"
+                            @click="openEditDialog(item)"
+                          />
+                          <q-btn
+                            flat
+                            round
+                            dense
+                            icon="close"
+                            color="negative"
+                            size="sm"
+                            @click="onDeleteItem(item)"
+                          />
+                        </div>
                       </div>
-                      <div class="row items-center q-gutter-sm">
+                      <div v-if="item.type !== 'text'" class="row items-center q-gutter-sm">
                         <div style="width: 70px">
                           <q-input
                             :model-value="item.quantity"
@@ -516,20 +536,32 @@
                       <div class="col">
                         <div class="row items-center q-gutter-xs">
                           <span
+                            v-if="item._posLabel"
                             style="
-                              font-size: 13.5px;
-                              font-weight: 500;
-                              color: #0f172a;
+                              font-size: 11px;
+                              font-weight: 700;
+                              color: #94a3b8;
+                            "
+                            >{{ item._posLabel }}</span
+                          >
+                          <span
+                            :style="
+                              item.type === 'text'
+                                ? 'font-size: 13.5px; font-weight: 700; color: #3730a3; text-transform: uppercase; letter-spacing: 0.03em;'
+                                : 'font-size: 13.5px; font-weight: 500; color: #0f172a;'
                             "
                             >{{ item.title }}</span
                           >
                           <q-badge
-                            :color="
-                              item.type === 'material' ? 'blue' : 'orange'
-                            "
-                            :label="
-                              item.type === 'material' ? 'Material' : 'Arbeit'
-                            "
+                            :color="itemTypeMeta(item).color"
+                            :label="itemTypeMeta(item).label"
+                            dense
+                            style="font-size: 10px"
+                          />
+                          <q-badge
+                            v-if="item.include_in_setup_costs"
+                            color="teal-7"
+                            label="Baustelleneinr."
                             dense
                             style="font-size: 10px"
                           />
@@ -541,6 +573,7 @@
                             style="font-size: 10px"
                           />
                           <q-icon
+                            v-if="item.type !== 'text'"
                             :name="
                               item.unit_price > 0 ? 'check_circle' : 'error'
                             "
@@ -567,48 +600,60 @@
                           {{ item.description }}
                         </div>
                       </div>
-                      <div style="width: 75px">
-                        <q-input
-                          :model-value="item.quantity"
-                          @change="(val) => onUpdateItem(item, 'quantity', val)"
-                          dense
-                          filled
-                          type="number"
-                          step="0.5"
-                          style="font-size: 13px"
-                        />
-                      </div>
-                      <div
-                        class="text-center"
-                        style="width: 55px; font-size: 12px; color: #64748b"
-                      >
-                        {{ item.unit }}
-                      </div>
-                      <div style="width: 95px">
-                        <q-input
-                          :model-value="item.unit_price"
-                          @change="
-                            (val) => onUpdateItem(item, 'unit_price', val)
+                      <template v-if="item.type !== 'text'">
+                        <div style="width: 75px">
+                          <q-input
+                            :model-value="item.quantity"
+                            @change="(val) => onUpdateItem(item, 'quantity', val)"
+                            dense
+                            filled
+                            type="number"
+                            step="0.5"
+                            style="font-size: 13px"
+                          />
+                        </div>
+                        <div
+                          class="text-center"
+                          style="width: 55px; font-size: 12px; color: #64748b"
+                        >
+                          {{ item.unit }}
+                        </div>
+                        <div style="width: 95px">
+                          <q-input
+                            :model-value="item.unit_price"
+                            @change="
+                              (val) => onUpdateItem(item, 'unit_price', val)
+                            "
+                            dense
+                            filled
+                            type="number"
+                            step="0.50"
+                            suffix="€"
+                            style="font-size: 13px"
+                          />
+                        </div>
+                        <div
+                          class="text-right"
+                          style="
+                            width: 95px;
+                            font-weight: 600;
+                            font-size: 13px;
+                            color: #0f172a;
                           "
-                          dense
-                          filled
-                          type="number"
-                          step="0.50"
-                          suffix="€"
-                          style="font-size: 13px"
-                        />
-                      </div>
-                      <div
-                        class="text-right"
-                        style="
-                          width: 95px;
-                          font-weight: 600;
-                          font-size: 13px;
-                          color: #0f172a;
-                        "
+                        >
+                          {{ formatPrice(item.quantity * item.unit_price) }} €
+                        </div>
+                      </template>
+                      <q-btn
+                        flat
+                        round
+                        dense
+                        icon="edit"
+                        color="grey-7"
+                        size="sm"
+                        @click="openEditDialog(item)"
+                        ><q-tooltip>Position bearbeiten</q-tooltip></q-btn
                       >
-                        {{ formatPrice(item.quantity * item.unit_price) }} €
-                      </div>
                       <q-btn
                         flat
                         round
@@ -683,7 +728,7 @@
               ><q-icon name="error" color="orange-8"
             /></template>
             <div style="font-size: 13px; font-weight: 700; color: #9a3412">
-              {{ unpricedCount }} von {{ quote.items.length }} Positionen ohne
+              {{ unpricedCount }} von {{ pricableItemsCount }} Positionen ohne
               Preis
             </div>
             <div style="font-size: 12px; color: #c2410c; margin-top: 2px">
@@ -725,6 +770,23 @@
                   <span style="color: #64748b">Arbeitsleistung</span
                   ><span style="font-weight: 600; color: #0f172a"
                     >{{ formatPrice(quote.subtotal_labor) }} €</span
+                  >
+                </div>
+                <div
+                  v-if="setupCostsTotal > 0"
+                  class="row justify-between items-center q-mt-xs"
+                  style="
+                    font-size: 11px;
+                    background: #f0fdfa;
+                    border-radius: 6px;
+                    padding: 4px 6px;
+                  "
+                >
+                  <span style="color: #0f766e"
+                    >davon als Baustelleneinrichtung/Anfahrt markiert
+                    (Material + Arbeit zusammen)</span
+                  ><span style="color: #0f766e; font-weight: 600"
+                    >{{ formatPrice(setupCostsTotal) }} €</span
                   >
                 </div>
                 <q-separator class="q-my-sm" />
@@ -869,7 +931,7 @@
       <q-card style="width: 95vw; max-width: 560px; border-radius: 16px">
         <q-card-section
           ><h6 class="q-my-none" style="color: #0f172a; font-weight: 600">
-            Position hinzufügen
+            {{ editingItemId ? "Position bearbeiten" : "Position hinzufügen" }}
           </h6></q-card-section
         >
         <q-card-section class="q-pt-none q-gutter-sm">
@@ -997,20 +1059,40 @@
             :options="[
               { label: 'Material', value: 'material' },
               { label: 'Arbeit', value: 'labor' },
+              { label: 'Pauschal', value: 'flat' },
+              { label: 'Überschrift (VOB-Gruppierung)', value: 'text' },
             ]"
             emit-value
             map-options
             label="Typ"
           />
+          <q-select
+            v-if="newItem.type !== 'text'"
+            v-model="newItem.parent_id"
+            filled
+            dense
+            clearable
+            :options="rootTextItems"
+            emit-value
+            map-options
+            label="Unterposition von (optional)"
+            hint="Für VOB-Gliederung: dieser Position eine Überschrift als Elternposition zuordnen"
+          />
           <q-input v-model="newItem.group_name" filled dense label="Gruppe" />
-          <q-input v-model="newItem.title" filled dense label="Bezeichnung" />
           <q-input
+            v-model="newItem.title"
+            filled
+            dense
+            :label="newItem.type === 'text' ? 'Überschrift' : 'Bezeichnung'"
+          />
+          <q-input
+            v-if="newItem.type !== 'text'"
             v-model="newItem.description"
             filled
             dense
             label="Beschreibung (optional)"
           />
-          <div class="row q-gutter-sm">
+          <div v-if="newItem.type !== 'text'" class="row q-gutter-sm">
             <q-input
               v-model.number="newItem.quantity"
               filled
@@ -1019,10 +1101,16 @@
               type="number"
               class="col"
             />
-            <q-input
+            <q-select
               v-model="newItem.unit"
               filled
               dense
+              use-input
+              fill-input
+              hide-selected
+              new-value-mode="add-unique"
+              :options="unitOptionsFiltered"
+              @filter="filterUnitOptions"
               label="Einheit"
               class="col"
             />
@@ -1036,6 +1124,7 @@
             />
           </div>
           <div
+            v-if="newItem.type !== 'text'"
             class="text-right"
             style="font-size: 14px; font-weight: 700; color: #1d4ed8"
           >
@@ -1045,15 +1134,28 @@
             }}
             €
           </div>
+          <div
+            v-if="newItem.type === 'text'"
+            style="font-size: 12px; color: #94a3b8"
+          >
+            Überschriften haben keinen eigenen Preis – die Summe ergibt sich
+            aus den Unterpositionen darunter.
+          </div>
+          <q-checkbox
+            v-if="newItem.type !== 'text'"
+            v-model="newItem.include_in_setup_costs"
+            label="In Baustelleneinrichtung/Anfahrt einrechnen"
+            dense
+          />
         </q-card-section>
         <q-card-actions align="right" class="q-pa-md">
           <q-btn flat label="Abbrechen" color="grey" v-close-popup />
           <q-btn
-            label="Hinzufügen"
+            :label="editingItemId ? 'Speichern' : 'Hinzufügen'"
             color="primary"
             no-caps
-            icon="add"
-            @click="onAddItem"
+            :icon="editingItemId ? 'save' : 'add'"
+            @click="onSaveItem"
             v-close-popup
           />
         </q-card-actions>
@@ -1441,6 +1543,23 @@ export default {
     //KI Price Analyse Dialog ref
     const showPriceCheck = ref(false);
 
+    const editingItemId = ref(null);
+
+    const unitOptions = ["cbm", "Tonne", "Stück", "m²", "m", "Std.", "Pauschal"];
+    const unitOptionsFiltered = ref([...unitOptions]);
+    const filterUnitOptions = (val, update) => {
+      update(() => {
+        if (!val) {
+          unitOptionsFiltered.value = unitOptions;
+          return;
+        }
+        const needle = val.toLowerCase();
+        unitOptionsFiltered.value = unitOptions.filter((u) =>
+          u.toLowerCase().includes(needle),
+        );
+      });
+    };
+
     const newItem = ref({
       type: "material",
       group_name: "",
@@ -1450,6 +1569,8 @@ export default {
       unit: "Stück",
       unit_price: 0,
       material_id: null,
+      parent_id: null,
+      include_in_setup_costs: false,
     });
 
     const statusOptions = [
@@ -1468,8 +1589,104 @@ export default {
         if (!g[gr]) g[gr] = [];
         g[gr].push(i);
       });
-      return g;
+
+      // Innerhalb jeder Gruppe: VOB-Hierarchie aufbauen. Überschriften
+      // (type='text') zuerst, direkt gefolgt von ihren Unterpositionen
+      // (parent_id -> Überschrift), mit "1", "1.1", "2" ... Nummerierung.
+      const result = {};
+      Object.keys(g).forEach((gr, groupIdx) => {
+        const groupItems = g[gr];
+        const byId = {};
+        groupItems.forEach((i) => (byId[i.id] = i));
+        const roots = groupItems.filter(
+          (i) => !i.parent_id || !byId[i.parent_id],
+        );
+        const ordered = [];
+        let rootIndex = 0;
+        roots.forEach((root) => {
+          rootIndex += 1;
+          const isHeading = root.type === "text";
+          ordered.push({
+            ...root,
+            _isChild: false,
+            // Überschriften bekommen keine eigene Positionsnummer mehr — die
+            // Gruppen-Nummer im Header (siehe Template) identifiziert sie
+            // bereits eindeutig. Einfache Positionen ohne Überschrift bleiben
+            // schlicht 1, 2, 3 ... wie bisher.
+            _posLabel: isHeading ? "" : String(rootIndex),
+          });
+          if (isHeading) {
+            const children = groupItems.filter((i) => i.parent_id === root.id);
+            children.forEach((child, childIndex) => {
+              ordered.push({
+                ...child,
+                _isChild: true,
+                // Unterpositionen erben die Gruppen-Nummer (1-basiert), NICHT
+                // einen separaten, per-Gruppe zurückgesetzten Zähler — so
+                // stimmt "2.1" in der Liste immer mit dem Gruppen-Header
+                // überein, egal wie viele Überschriften die Gruppe hat.
+                _posLabel: `${groupIdx + 1}.${childIndex + 1}`,
+              });
+            });
+          }
+        });
+        result[gr] = ordered;
+      });
+      return result;
     });
+
+    // Überschriften (type='text') dieses Angebots, als Auswahlliste für
+    // "Unterposition von" im Positions-Dialog. Die gerade bearbeitete
+    // Position selbst wird ausgeschlossen (keine Selbstreferenz).
+    const rootTextItems = computed(() => {
+      if (!quote.value?.items) return [];
+      return quote.value.items
+        .filter(
+          (i) =>
+            i.type === "text" &&
+            !i.parent_id &&
+            i.id !== editingItemId.value,
+        )
+        .map((i) => ({ label: i.title, value: i.id }));
+    });
+
+    // Summe aller Positionen, die in die Baustelleneinrichtung/Anfahrt
+    // eingerechnet werden sollen.
+    const setupCostsTotal = computed(() => {
+      if (!quote.value?.items) return 0;
+      return quote.value.items
+        .filter((i) => i.include_in_setup_costs)
+        .reduce(
+          (sum, i) => sum + Number(i.quantity) * Number(i.unit_price),
+          0,
+        );
+    });
+
+    const itemTypeMeta = (item) => {
+      switch (item.type) {
+        case "material":
+          return { color: "blue", label: "Material" };
+        case "labor":
+          return { color: "orange", label: "Arbeit" };
+        case "flat":
+          return { color: "purple", label: "Pauschal" };
+        case "text":
+          return { color: "grey-7", label: "Überschrift" };
+        default:
+          return { color: "grey", label: item.type };
+      }
+    };
+
+    const itemCardStyle = (item) => {
+      const base =
+        item.type === "text"
+          ? "background: #eef2ff; border: 1px solid #c7d2fe;"
+          : "background: #f8fafc; border: 1px solid #f1f5f9;";
+      const indent = item._isChild
+        ? "margin-left: 22px; border-left: 3px solid #94a3b8;"
+        : "";
+      return `${base} border-radius: 10px; ${indent}`;
+    };
 
       const previewPdfUrl = computed(() => {
       if (!quote.value) return "";
@@ -1480,8 +1697,16 @@ export default {
     const unpricedCount = computed(() => {
       if (!quote.value?.items) return 0;
       return quote.value.items.filter(
-        (i) => !i.unit_price || Number(i.unit_price) === 0,
+        (i) =>
+          i.type !== "text" && (!i.unit_price || Number(i.unit_price) === 0),
       ).length;
+    });
+
+    // Nenner für die "X von Y Positionen ohne Preis"-Anzeige: Überschriften
+    // zaehlen nicht mit, die haben nie einen eigenen Preis.
+    const pricableItemsCount = computed(() => {
+      if (!quote.value?.items) return 0;
+      return quote.value.items.filter((i) => i.type !== "text").length;
     });
 
     const filteredDialogCustomers = computed(() => {
@@ -1547,6 +1772,7 @@ export default {
     };
 
     const openAddDialog = () => {
+      editingItemId.value = null;
       // Erste Gruppenname aus bestehenden Positionen vorschlagen
       const existingGroups = Object.keys(groupedItems.value);
       newItem.value = {
@@ -1561,6 +1787,28 @@ export default {
         unit: "Stück",
         unit_price: 0,
         material_id: null,
+        parent_id: null,
+        include_in_setup_costs: false,
+      };
+      materialSearch.value = "";
+      catalogResults.value = [];
+      selectedMaterial.value = null;
+      showAddDialog.value = true;
+    };
+
+    const openEditDialog = (item) => {
+      editingItemId.value = item.id;
+      newItem.value = {
+        type: item.type,
+        group_name: item.group_name || "Sonstiges",
+        title: item.title,
+        description: item.description || "",
+        quantity: Number(item.quantity),
+        unit: item.unit,
+        unit_price: Number(item.unit_price),
+        material_id: item.material_id || null,
+        parent_id: item.parent_id || null,
+        include_in_setup_costs: !!item.include_in_setup_costs,
       };
       materialSearch.value = "";
       catalogResults.value = [];
@@ -1698,9 +1946,16 @@ export default {
     };
 
     const onDeleteItem = async (item) => {
+      const childCount = (quote.value?.items || []).filter(
+        (i) => i.parent_id === item.id,
+      ).length;
+      const message =
+        childCount > 0
+          ? `"${item.title}" wirklich entfernen? Die ${childCount} Unterposition(en) darunter werden dabei automatisch mitgelöscht.`
+          : `"${item.title}" wirklich entfernen?`;
       $q.dialog({
         title: "Position löschen?",
-        message: `"${item.title}" wirklich entfernen?`,
+        message,
         cancel: true,
       }).onOk(async () => {
         await quoteStore.deleteItem(quote.value.id, item.id);
@@ -1708,14 +1963,47 @@ export default {
       });
     };
 
-    const onAddItem = async () => {
+    const onSaveItem = async () => {
+      const isHeading = newItem.value.type === "text";
       if (!newItem.value.title) {
-        $q.notify({ type: "warning", message: "Bitte Bezeichnung eingeben" });
+        $q.notify({
+          type: "warning",
+          message: isHeading
+            ? "Bitte eine Überschrift eingeben"
+            : "Bitte Bezeichnung eingeben",
+        });
         return;
       }
-      await quoteStore.addItem(quote.value.id, newItem.value);
-      quote.value = quoteStore.currentQuote;
-      $q.notify({ type: "positive", message: "Position hinzugefügt" });
+      const payload = { ...newItem.value };
+      if (isHeading) {
+        // Überschriften sind reine Gruppierung ohne eigenen Preis.
+        payload.quantity = 0;
+        payload.unit = "-";
+        payload.unit_price = 0;
+        payload.parent_id = null;
+        payload.material_id = null;
+        payload.include_in_setup_costs = false;
+      }
+      try {
+        if (editingItemId.value) {
+          await quoteStore.updateItem(
+            quote.value.id,
+            editingItemId.value,
+            payload,
+          );
+          $q.notify({ type: "positive", message: "Position aktualisiert" });
+        } else {
+          await quoteStore.addItem(quote.value.id, payload);
+          $q.notify({ type: "positive", message: "Position hinzugefügt" });
+        }
+        quote.value = quoteStore.currentQuote;
+        editingItemId.value = null;
+      } catch (e) {
+        $q.notify({
+          type: "negative",
+          message: "Fehler beim Speichern der Position",
+        });
+      }
     };
 
     // Template functions
@@ -1858,7 +2146,16 @@ export default {
       saveDiscount,
       onUpdateItem,
       onDeleteItem,
-      onAddItem,
+      onSaveItem,
+      editingItemId,
+      openEditDialog,
+      unitOptions,
+      unitOptionsFiltered,
+      filterUnitOptions,
+      rootTextItems,
+      setupCostsTotal,
+      itemTypeMeta,
+      itemCardStyle,
       onStatusChange,
       onSend,
       onDuplicate,
@@ -1877,6 +2174,7 @@ export default {
        showPreviewDrawer,
       previewPdfUrl,
       unpricedCount,
+      pricableItemsCount,
       showPriceCheck,
       onShareLink,
     };
