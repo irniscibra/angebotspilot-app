@@ -519,29 +519,23 @@ PROMPT;
                     'catalog_name' => $matchedMaterial?->name,
                     'catalog_price' => $matchedMaterial ? $unitPrice : null,
                 ];
+                // WICHTIG: $description bleibt unveraendert die kundensichtbare
+                // Beschreibung (wird 1:1 im PDF und in der oeffentlichen
+                // Angebotsansicht angezeigt). Sicherheitsnetz-Warnungen gehen
+                // NIE in dieses Feld, sondern ausschliesslich in $internalNote,
+                // das nur in der internen Bearbeitungsansicht sichtbar ist.
                 $description = $item['description'] ?? null;
+                $internalNote = null;
                 if (!empty($item['price_suspicious']) && !$matchedMaterial) {
-                    $description = trim(
-                        ($description ? $description . ' ' : '') .
-                        '🔴 ACHTUNG: Preis wirkt unrealistisch hoch für diese Position – unbedingt vor Versand prüfen!'
-                    );
+                    $internalNote = '🔴 ACHTUNG: Preis wirkt unrealistisch hoch für diese Position – unbedingt vor Versand prüfen!';
                 } elseif (!empty($item['needs_quantity_review']) && !$matchedMaterial) {
-                    $description = trim(
-                        ($description ? $description . ' ' : '') .
-                        '⚠ Pauschalpreis – bitte prüfen, ob alle Materialien realistisch mit eingerechnet sind.'
-                    );
+                    $internalNote = '⚠ Pauschalpreis – bitte prüfen, ob alle Materialien realistisch mit eingerechnet sind.';
                 } elseif (!empty($item['own_rate_unit_mismatch'])) {
                     $rateName = $item['own_rate_unit_mismatch_name'] ?? '';
-                    $description = trim(
-                        ($description ? $description . ' ' : '') .
-                        "🔴 ACHTUNG: Diese Position gehört zu deinem Satz \"{$rateName}\" (Meine Sätze), die Einheit passt aber nicht dazu (z.B. Stundensatz falsch als Flächen-/Volumenpreis verwendet) – Preis wurde auf 0 gesetzt, bitte Menge/Einheit korrigieren!"
-                    );
+                    $internalNote = "🔴 ACHTUNG: Diese Position gehört zu deinem Satz \"{$rateName}\" (Meine Sätze), die Einheit passt aber nicht dazu (z.B. Stundensatz falsch als Flächen-/Volumenpreis verwendet) – Preis wurde auf 0 gesetzt, bitte Menge/Einheit korrigieren!";
                 } elseif (!empty($item['own_rate_auto_corrected'])) {
                     $rateName = $item['own_rate_auto_corrected_name'] ?? '';
-                    $description = trim(
-                        ($description ? $description . ' ' : '') .
-                        "✓ Preis automatisch auf deinen hinterlegten Satz \"{$rateName}\" (Meine Sätze) korrigiert."
-                    );
+                    $internalNote = "✓ Preis automatisch auf deinen hinterlegten Satz \"{$rateName}\" (Meine Sätze) korrigiert.";
                 }
 
                 $quantity = $itemType === 'text' ? 0 : ($item['quantity'] ?? 1);
@@ -555,6 +549,7 @@ PROMPT;
                     'type' => $itemType,
                     'title' => $matchedMaterial ? $matchedMaterial->name : $item['title'],
                     'description' => $description,
+                    'internal_note' => $internalNote,
                     'quantity' => $quantity,
                     'unit' => $unit,
                     'unit_price' => $unitPrice,

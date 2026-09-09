@@ -288,6 +288,7 @@ class QuoteController extends Controller
         $request->validate([
             'title' => 'sometimes|string|max:255',
             'description' => 'nullable|string',
+            'internal_note' => 'nullable|string',
             'quantity' => 'sometimes|numeric|min:0',
             'unit' => 'sometimes|string|max:20',
             'unit_price' => 'sometimes|numeric|min:0',
@@ -297,9 +298,17 @@ class QuoteController extends Controller
             'include_in_setup_costs' => 'sometimes|boolean',
         ]);
 
+        // internal_note ist bewusst NICHT Teil von $request->only([...]) unten,
+        // sondern wird separat behandelt: nur wenn der Request den Schluessel
+        // explizit mitschickt (z.B. Nutzer bestaetigt/loescht eine
+        // Sicherheitsnetz-Warnung), wird er ueberschrieben.
         $data = $request->only([
             'title', 'description', 'quantity', 'unit', 'unit_price', 'group_name', 'type',
         ]);
+
+        if ($request->has('internal_note')) {
+            $data['internal_note'] = $request->input('internal_note');
+        }
 
         if ($request->has('include_in_setup_costs')) {
             $data['include_in_setup_costs'] = $request->boolean('include_in_setup_costs');

@@ -840,25 +840,6 @@
         </div>
     </div>
 
-    <!-- UNTERSCHRIFTEN -->
-    <div class="signature-section">
-        <div class="sig-block">
-            <br><br><br>
-            <div class="sig-line">
-                <div class="sig-name">{{ $creator->name }}</div>
-                <div class="sig-label">{{ $company->name }}<br>Ort, Datum &amp; Unterschrift</div>
-            </div>
-        </div>
-        <div class="sig-spacer"></div>
-        <div class="sig-block">
-            <br><br><br>
-            <div class="sig-line">
-                <div class="sig-name">&nbsp;</div>
-                <div class="sig-label">Auftraggeber/in<br>Ort, Datum &amp; Unterschrift zur Auftragserteilung</div>
-            </div>
-        </div>
-    </div>
-
     <!-- PFLICHTANGABEN -->
     <div class="legal-banner">
         <strong>{{ $company->name }}</strong>

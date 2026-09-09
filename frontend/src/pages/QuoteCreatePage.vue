@@ -1503,9 +1503,25 @@
                     />
                     <div
                       v-if="item.description"
-                      :style="itemDescriptionStyle(item.description)"
+                      style="font-size: 11px; color: #64748b; margin-top: 4px"
                     >
                       {{ item.description }}
+                    </div>
+                    <div
+                      v-if="item.internal_note"
+                      :style="itemDescriptionStyle(item.internal_note)"
+                    >
+                      <span
+                        style="
+                          font-size: 9.5px;
+                          font-weight: 700;
+                          text-transform: uppercase;
+                          letter-spacing: 0.04em;
+                          opacity: 0.75;
+                          margin-right: 4px;
+                        "
+                        >Nur intern, nicht im PDF:</span
+                      >{{ item.internal_note }}
                     </div>
                   </div>
                   <template v-if="item.type !== 'text'">

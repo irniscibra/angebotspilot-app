@@ -17,6 +17,7 @@ class QuoteItem extends Model
         'type',
         'title',
         'description',
+        'internal_note',
         'quantity',
         'unit',
         'unit_price',
