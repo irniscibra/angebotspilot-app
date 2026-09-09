@@ -99,7 +99,12 @@ class QuoteAIService
         // "Meine Sätze" abgleichen und Preis/Markierung ggf. korrigieren
             $aiResult['groups'] = $this->enforceOwnRateMatch($aiResult['groups'], $company);
 
-      
+        // Sicherheitsnetz: Arbeitsschritte, die typischerweise Material
+        // verbrauchen (Schalung, Bewehrung, Beton, ...), aber in deren Gruppe
+        // keine einzige Material-Position existiert, intern markieren.
+        // Reagiert auf die KI-Unzuverlaessigkeit, dass bei sonst identischen
+        // Prompts mal Material-Positionen erzeugt werden und mal nicht.
+            $aiResult['groups'] = $this->flagMissingMaterialForConstructionWork($aiResult['groups']);
 
         // Positionen erstellen – mit intelligentem Katalog-Matching
             $matchLog = $this->createQuoteItems($quote, $aiResult['groups'], $allMaterials);
@@ -332,6 +337,7 @@ REGELN FÜR DIE KALKULATION:
    bevor du antwortest.
 1. Gliedere das Angebot in logische Gewerke-Gruppen (z.B. "Demontage & Entsorgung", "Sanitärinstallation", "Rohrleitungen", "Heizungsarbeiten", etc.)
 2. Trenne IMMER Material und Arbeitsleistung als separate Positionen. WICHTIG: Wenn Material- und Arbeitsposition zum selben Arbeitsschritt gehören, müssen sich ihre Titel klar unterscheiden (z.B. "Schalung und Bewehrung – Material" und "Schalung und Bewehrung – Einbau"), NIEMALS zwei Positionen mit exakt demselben Titel — der Kunde muss auf den ersten Blick erkennen können, welche Position was ist.
+2a. PFLICHT-MATERIAL BEI BAULEISTUNGEN: Wenn ein Arbeitsschritt zwingend Material verbraucht (z.B. Schalung, Bewehrung/Stahl, Beton, Mauerwerk/Steine, Pflaster, Asphalt, Putz, Estrich, Dämmung, Abdichtung, Trennfolie/PE-Folie, Mörtel, Fliesen), MUSST du IMMER eine eigene Material-Position dafür erzeugen — NIEMALS nur die Arbeitsleistung ohne das dazugehörige Material auflisten. Beispiel FALSCH: nur "Schalung" als Arbeitsposition ohne Schalungsmaterial. Beispiel RICHTIG: "Schalungsmaterial" (type=material) UND "Schalung erstellen" (type=labor) als zwei getrennte Positionen. Prüfe vor der Antwort jede Arbeitsposition: verbraucht dieser Schritt Material? Falls ja, MUSS eine passende Material-Position im selben Abschnitt existieren.
 3. Kalkuliere realistische Mengen und Preise für den deutschen Markt (Stand 2026) 
 4. Verwende marktübliche Markenmaterialien (Grohe, Hansgrohe, Viega, Geberit, Buderus, Vaillant etc.)
 5. Plane eine Kleinmaterial-Pauschale ein (5-8% der Materialkosten) NUR für wirklich
@@ -536,6 +542,9 @@ PROMPT;
                 } elseif (!empty($item['own_rate_auto_corrected'])) {
                     $rateName = $item['own_rate_auto_corrected_name'] ?? '';
                     $internalNote = "✓ Preis automatisch auf deinen hinterlegten Satz \"{$rateName}\" (Meine Sätze) korrigiert.";
+                } elseif (!empty($item['missing_material_suspected'])) {
+                    $keyword = $item['missing_material_keyword'] ?? '';
+                    $internalNote = "⚠ Dieser Arbeitsschritt (\"{$keyword}\") benötigt normalerweise eigenes Material, in dieser Gruppe ist aber keine Material-Position vorhanden – bitte prüfen, ob Material fehlt und ergänzt werden muss.";
                 }
 
                 $quantity = $itemType === 'text' ? 0 : ($item['quantity'] ?? 1);
@@ -1064,6 +1073,58 @@ private function enforceMinimumPrices(array $groups): array
             }
         }
         unset($group, $item);
+
+        return $groups;
+    }
+
+    /**
+     * Sicherheitsnetz: markiert Arbeitspositionen, deren Titel/Beschreibung
+     * auf einen materialbenoetigenden Bauschritt hindeutet (Schalung,
+     * Bewehrung, Beton, Mauerwerk, ...), wenn in derselben Gruppe KEINE
+     * einzige Material-Position vorhanden ist. Rein additiv (internal_note),
+     * aendert nie Preise/Mengen - wir wissen nicht, welches Material genau
+     * fehlt, nur DASS wahrscheinlich etwas fehlt.
+     */
+    private function flagMissingMaterialForConstructionWork(array $groups): array
+    {
+        $materialKeywords = [
+            'schalung', 'bewehrung', 'beton', 'mauerwerk', 'pflaster', 'asphalt',
+            'putz', 'estrich', 'dämmung', 'daemmung', 'abdichtung', 'mörtel',
+            'moertel', 'fliesen', 'ziegel',
+        ];
+
+        foreach ($groups as &$group) {
+            $hasMaterialItem = false;
+            foreach ($group['items'] as $item) {
+                if (($item['type'] ?? '') === 'material') {
+                    $hasMaterialItem = true;
+                    break;
+                }
+            }
+
+            if ($hasMaterialItem) {
+                continue;
+            }
+
+            foreach ($group['items'] as &$item) {
+                if (($item['type'] ?? '') !== 'labor') {
+                    continue;
+                }
+                $itemText = strtolower(trim(($item['title'] ?? '') . ' ' . ($item['description'] ?? '')));
+                if ($itemText === '') {
+                    continue;
+                }
+                foreach ($materialKeywords as $keyword) {
+                    if (str_contains($itemText, $keyword)) {
+                        $item['missing_material_suspected'] = true;
+                        $item['missing_material_keyword'] = $keyword;
+                        break;
+                    }
+                }
+            }
+            unset($item);
+        }
+        unset($group);
 
         return $groups;
     }
