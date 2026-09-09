@@ -212,6 +212,8 @@ Route::apiResource('materials', MaterialController::class);
 
 // Meine Sätze (firmeneigene Stundensätze/Gerätesätze für die KI)
 Route::apiResource('company-rates', CompanyRateController::class)->only(['index', 'store', 'update', 'destroy']);
+// Saetze aus frei eingefuegtem Text erkennen (reine Vorschau, kein Speichern)
+Route::post('company-rates/import-preview', [CompanyRateController::class, 'importPreview']);
 
 // Datanorm Import
     Route::prefix('datanorm')->group(function () {

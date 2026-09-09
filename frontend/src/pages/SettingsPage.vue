@@ -429,7 +429,16 @@
             </div>
           </div>
 
-          <div class="ap-panel-footer">
+          <div class="ap-panel-footer ap-rate-footer">
+            <q-btn
+              flat
+              color="primary"
+              label="Aus Text übernehmen"
+              no-caps
+              icon="content_paste_go"
+              @click="openImportDialog"
+              class="ap-save-btn ap-import-btn"
+            />
             <q-btn
               unelevated
               color="primary"
@@ -761,6 +770,139 @@
         /></q-card-actions>
       </q-card>
     </q-dialog>
+
+    <!-- Text-Import-Dialog (Meine Sätze) -->
+    <q-dialog v-model="importDialogOpen" persistent>
+      <q-card class="ap-import-card">
+        <q-card-section class="row items-center q-pb-sm ap-import-head">
+          <div>
+            <h6 class="q-my-none ap-import-title">
+              Sätze aus Text übernehmen
+            </h6>
+            <div class="ap-import-subtitle" v-if="importStep === 'paste'">
+              Text kopieren (z.B. aus Email/WhatsApp...etc) und einfügen
+            </div>
+            <div class="ap-import-subtitle" v-else>
+              {{ importRows.length }} Satz{{ importRows.length === 1 ? "" : "e" }} erkannt &middot; prüfen und anpassen
+            </div>
+          </div>
+          <q-space />
+          <q-btn flat round dense icon="close" color="grey-5" v-close-popup />
+        </q-card-section>
+
+        <!-- Schritt 1: Text einfügen -->
+        <q-card-section v-if="importStep === 'paste'" class="q-pt-none">
+          <q-input
+            v-model="importText"
+            filled
+            type="textarea"
+            autogrow
+            label="Preisliste / Nachricht einfügen"
+            hint="Bezeichnungen und Preise reichen - die KI erkennt daraus eine Vorschlagsliste."
+            class="ap-import-textarea"
+          />
+        </q-card-section>
+
+        <!-- Schritt 2: erkannte Sätze prüfen -->
+        <q-card-section v-else class="q-pt-none ap-import-rows-section">
+          <div v-if="importRows.length === 0" class="ap-rate-empty">
+            Keine Zeilen mehr übrig.
+          </div>
+          <div class="ap-import-grid">
+            <div v-for="row in importRows" :key="row._key" class="ap-import-row">
+              <div class="ap-import-row-top">
+                <q-input
+                  v-model="row.name"
+                  dense
+                  filled
+                  label="Bezeichnung"
+                  class="ap-import-name"
+                />
+                <q-btn
+                  flat
+                  round
+                  dense
+                  size="sm"
+                  icon="close"
+                  color="grey-6"
+                  @click="removeImportRow(row._key)"
+                />
+              </div>
+              <div class="row q-gutter-sm ap-import-row-mid">
+                <q-input
+                  v-model.number="row.price"
+                  dense
+                  filled
+                  type="number"
+                  label="Preis"
+                  suffix="€"
+                  class="col"
+                />
+                <q-select
+                  v-model="row.unit"
+                  dense
+                  filled
+                  label="Einheit"
+                  :options="rateUnitOptions"
+                  use-input
+                  new-value-mode="add-unique"
+                  class="col"
+                />
+              </div>
+              <q-input
+                v-model="row.note"
+                dense
+                filled
+                label="Hinweis (optional)"
+                class="ap-import-note"
+              />
+            </div>
+          </div>
+          <q-btn
+            flat
+            no-caps
+            dense
+            icon="add"
+            label="Zeile manuell hinzufügen"
+            color="primary"
+            class="ap-import-add-row"
+            @click="addImportRow"
+          />
+        </q-card-section>
+
+        <q-card-actions align="right" class="q-pa-md">
+          <template v-if="importStep === 'paste'">
+            <q-btn flat label="Abbrechen" color="grey" v-close-popup />
+            <q-btn
+              label="Sätze erkennen"
+              color="primary"
+              no-caps
+              icon="auto_awesome"
+              :loading="importLoading"
+              @click="runImportPreview"
+            />
+          </template>
+          <template v-else>
+            <q-btn
+              flat
+              label="Zurück"
+              color="grey"
+              no-caps
+              @click="backToPasteStep"
+            />
+            <q-btn
+              label="Sätze speichern"
+              color="primary"
+              no-caps
+              icon="save"
+              :loading="importSaving"
+              :disable="importRows.length === 0"
+              @click="saveImportedRates"
+            />
+          </template>
+        </q-card-actions>
+      </q-card>
+    </q-dialog>
   </q-page>
 </template>
 
@@ -1063,6 +1205,132 @@ export default {
       });
     };
 
+    // === Meine Sätze: Text-Import (Vorschau -> anpassen -> speichern) ===
+    // Ergänzt das manuelle Anlegen/Bearbeiten oben, ersetzt es nicht - der
+    // Speichern-Schritt nutzt bewusst denselben /company-rates Endpunkt wie
+    // onSaveRate(), damit es keinen zweiten, abweichenden Speicherpfad gibt.
+    const importDialogOpen = ref(false);
+    const importStep = ref("paste"); // "paste" | "preview"
+    const importText = ref("");
+    const importLoading = ref(false);
+    const importSaving = ref(false);
+    const importRows = ref([]);
+    let importRowSeq = 0;
+
+    const openImportDialog = () => {
+      importStep.value = "paste";
+      importText.value = "";
+      importRows.value = [];
+      importDialogOpen.value = true;
+    };
+
+    const runImportPreview = async () => {
+      const text = importText.value.trim();
+      if (!text) {
+        $q.notify({ type: "negative", message: "Bitte zuerst Text einfügen" });
+        return;
+      }
+      importLoading.value = true;
+      try {
+        const r = await api.post("/company-rates/import-preview", { text });
+        const rates = r.data?.rates || [];
+        if (rates.length === 0) {
+          $q.notify({
+            type: "warning",
+            message: "Keine Sätze im Text erkannt. Bitte prüfen und erneut versuchen.",
+          });
+          return;
+        }
+        importRows.value = rates.map((rate) => ({
+          _key: ++importRowSeq,
+          name: rate.name || "",
+          price: rate.price ?? null,
+          unit: rate.unit || "Std",
+          note: rate.note || "",
+        }));
+        importStep.value = "preview";
+      } catch (e) {
+        $q.notify({
+          type: "negative",
+          message: e.response?.data?.message || "Sätze konnten nicht erkannt werden",
+        });
+      } finally {
+        importLoading.value = false;
+      }
+    };
+
+    const addImportRow = () => {
+      importRows.value.push({
+        _key: ++importRowSeq,
+        name: "",
+        price: null,
+        unit: "Std",
+        note: "",
+      });
+    };
+
+    const removeImportRow = (key) => {
+      importRows.value = importRows.value.filter((row) => row._key !== key);
+    };
+
+    const backToPasteStep = () => {
+      importStep.value = "paste";
+    };
+
+    const saveImportedRates = async () => {
+      const validRows = importRows.value.filter(
+        (row) => row.name?.trim() && Number(row.price) > 0
+      );
+      if (validRows.length === 0) {
+        $q.notify({
+          type: "negative",
+          message: "Keine gültigen Zeilen zum Speichern (Name + Preis noetig)",
+        });
+        return;
+      }
+      importSaving.value = true;
+      try {
+        const results = await Promise.allSettled(
+          validRows.map((row) =>
+            api.post("/company-rates", {
+              name: row.name.trim(),
+              price: Number(row.price),
+              unit: row.unit || "Std",
+              note: row.note?.trim() || null,
+            })
+          )
+        );
+        const failedKeys = new Set(
+          results
+            .map((res, i) => (res.status === "rejected" ? validRows[i]._key : null))
+            .filter((key) => key !== null)
+        );
+        const succeededCount = validRows.length - failedKeys.size;
+
+        await loadCompanyRates();
+
+        if (failedKeys.size === 0) {
+          importDialogOpen.value = false;
+          $q.notify({
+            type: "positive",
+            message: `${succeededCount} Satz${succeededCount === 1 ? "" : "e"} gespeichert`,
+          });
+        } else {
+          // Nur die fehlgeschlagenen Zeilen (+ leere/ungültige, die nie
+          // versucht wurden) bleiben zur erneuten Pruefung in der Vorschau.
+          importRows.value = importRows.value.filter(
+            (row) => failedKeys.has(row._key) || !validRows.includes(row)
+          );
+          $q.notify({
+            type: "warning",
+            message: `${succeededCount} gespeichert, ${failedKeys.size} fehlgeschlagen - bitte prüfen`,
+          });
+        }
+      } finally {
+        importSaving.value = false;
+      }
+    };
+
     const confirmCancel = ref(false);
     const cancelling = ref(false);
 
@@ -1190,6 +1458,18 @@ export default {
       openEditRateDialog,
       onSaveRate,
       onDeleteRate,
+      importDialogOpen,
+      importStep,
+      importText,
+      importLoading,
+      importSaving,
+      importRows,
+      openImportDialog,
+      runImportPreview,
+      addImportRow,
+      removeImportRow,
+      backToPasteStep,
+      saveImportedRates,
     };
   },
 };
@@ -1624,5 +1904,93 @@ export default {
   min-width: 380px;
   max-width: 95vw;
   border-radius: 16px;
+}
+
+/* Meine Sätze: Text-Import - Footer mit zwei Aktionen (bestehendes manuelles
+   Anlegen bleibt unverändert, Import ist eine zusätzliche, gleichwertige
+   Option davor). Wrap statt Überlauf auf schmalen Bildschirmen. */
+.ap-rate-footer {
+  flex-wrap: wrap;
+  gap: 10px;
+}
+.ap-import-btn {
+  background: #eef2ff;
+  border-radius: 9px;
+}
+
+.ap-import-card {
+  width: 720px;
+  max-width: 95vw;
+  border-radius: 16px;
+}
+.ap-import-head {
+  padding: 20px 24px 8px;
+}
+.ap-import-title {
+  font-weight: 600;
+  font-size: 17px;
+  color: #0f172a;
+}
+.ap-import-subtitle {
+  font-size: 12.5px;
+  color: #64748b;
+  margin-top: 3px;
+}
+.ap-import-textarea :deep(textarea) {
+  min-height: 180px;
+}
+.ap-import-rows-section {
+  max-height: 56vh;
+  overflow-y: auto;
+}
+.ap-import-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 12px;
+}
+.ap-import-row {
+  border: 1px solid #eceef4;
+  border-radius: 12px;
+  padding: 12px;
+  background: #fafbfd;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+}
+.ap-import-row-top {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+.ap-import-row-top .ap-import-name {
+  flex: 1;
+  min-width: 0;
+}
+.ap-import-row-mid {
+  margin: 0;
+}
+.ap-import-add-row {
+  margin-top: 4px;
+}
+
+@media (max-width: 599px) {
+  .ap-panel-footer.ap-rate-footer {
+    flex-direction: column-reverse;
+  }
+  .ap-rate-footer .ap-save-btn {
+    width: 100%;
+  }
+  .ap-import-grid {
+    grid-template-columns: 1fr;
+  }
+  .ap-import-head {
+    padding: 16px 16px 6px;
+  }
+  .ap-import-rows-section {
+    padding-left: 12px;
+    padding-right: 12px;
+    max-height: 62vh;
+  }
 }
 </style>

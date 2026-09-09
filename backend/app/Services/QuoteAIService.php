@@ -309,6 +309,22 @@ WICHTIG ZU DEN EIGENEN SÄTZEN:
   Fall einen eigenen, angemessenen Preis wie ohne "Meine Sätze" (typischerweise höher,
   da größeres Gerät). Ein bloßes Vorkommen des Wortes "Bagger" reicht NICHT als Treffer
   — die konkrete Größe/Bezeichnung muss zum Satz passen.
+- ZUSAMMENGEHÖRENDE SÄTZE (Pauschale + Zuschlag pro Einheit): Manche Firmen haben für
+  EINE Leistung zwei eigene Sätze mit demselben Namensbestandteil, aber unterschiedlichen
+  Einheiten (z.B. "Anfahrt Pauschale" in EUR/Pauschale UND "Anfahrt je weiterer km" in
+  EUR/km). Wenn du erkennst, dass mehrere eigene Sätze so zusammengehören UND der Kunde
+  einen konkreten Wert nennt, der zur variablen Einheit passt (z.B. eine Kilometerangabe
+  bei einem km-Satz), MUSST du dafür ZWEI GETRENNTE Positionen erzeugen — eine mit dem
+  Pauschale-Satz (Menge 1), eine mit dem Zuschlags-Satz (Menge = genannter Wert, z.B.
+  Anzahl km). Beispiel FALSCH: nur "Anfahrt Pauschale" (20 EUR) verwenden, obwohl der
+  Kunde "12 km Anfahrt" nennt und zusätzlich ein Satz "Anfahrt je weiterer km" (0,80
+  EUR/km) existiert — das unterschlägt 12 × 0,80 EUR. Beispiel RICHTIG: Position 1
+  "Anfahrt Pauschale", 1 Pauschale, 20 EUR; Position 2 "Anfahrt weitere Kilometer",
+  12 km, 0,80 EUR/km. NIEMALS nur einen der beiden zusammengehörenden Sätze verwenden
+  und den anderen stillschweigend ignorieren. Die MENGE für den Zuschlags-Satz ist
+  IMMER exakt die vom Kunden genannte Zahl — bei "8 km einfache Strecke" ist die Menge
+  8, NICHT 16. NIEMALS verdoppeln (z.B. für Hin- und Rückfahrt), außer der Kunde nennt
+  ausdrücklich beide Strecken getrennt (z.B. "8 km Hinfahrt und 8 km Rückfahrt").
 OWNRATES;
         }
 
