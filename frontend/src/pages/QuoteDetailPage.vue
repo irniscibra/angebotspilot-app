@@ -455,7 +455,7 @@
                           </div>
                           <div
                             v-if="item.description"
-                            style="font-size: 11px; color: #94a3b8"
+                            :style="itemDescriptionStyle(item.description)"
                           >
                             {{ item.description }}
                           </div>
@@ -591,11 +591,7 @@
                         </div>
                         <div
                           v-if="item.description"
-                          style="
-                            font-size: 11px;
-                            margin-top: 2px;
-                            color: #94a3b8;
-                          "
+                          :style="itemDescriptionStyle(item.description)"
                         >
                           {{ item.description }}
                         </div>
@@ -1677,6 +1673,24 @@ export default {
       }
     };
 
+    // Beschreibung/Hinweistext unter jeder Position: Sicherheitsnetz-Warnungen
+    // (🔴 falsche Zuordnung, ⚠ sonstiger Hinweis, ✓ automatisch korrigiert)
+    // muessen deutlich lesbar sein, nicht nur als blasse Randnotiz.
+    const itemDescriptionStyle = (description) => {
+      const base = "font-size: 11px; margin-top: 4px;";
+      if (!description) return base + " color: #64748b;";
+      if (description.includes("🔴")) {
+        return base + " color: #b42318; font-weight: 600;";
+      }
+      if (description.includes("⚠")) {
+        return base + " color: #92400e; font-weight: 600;";
+      }
+      if (description.includes("✓")) {
+        return base + " color: #15803d; font-weight: 500;";
+      }
+      return base + " color: #64748b;";
+    };
+
     const itemCardStyle = (item) => {
       const base =
         item.type === "text"
@@ -2155,6 +2169,7 @@ export default {
       rootTextItems,
       setupCostsTotal,
       itemTypeMeta,
+      itemDescriptionStyle,
       itemCardStyle,
       onStatusChange,
       onSend,

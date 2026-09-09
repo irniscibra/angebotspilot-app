@@ -371,6 +371,77 @@
           </div>
         </div>
 
+        <!-- MEINE SÄTZE -->
+        <div v-if="tab === 'rates'" class="ap-panel">
+          <div class="ap-panel-head">
+            <h6 class="ap-panel-title">Meine Sätze</h6>
+            <p class="ap-panel-desc">
+              Eigene Stundensätze und Gerätesätze (z.B. "Minibagger 89€/Std").
+              Die KI nutzt diese Sätze bei jedem Angebot bevorzugt, statt nur
+              allgemeine Referenzpreise zu schätzen.
+            </p>
+          </div>
+
+          <div v-if="ratesLoading" class="ap-loading" style="min-height: 120px">
+            <q-spinner-orbit color="primary" size="34px" />
+          </div>
+
+          <div v-else class="ap-rate-panel-body">
+            <div v-if="companyRates.length === 0" class="ap-rate-empty">
+              Noch keine eigenen Sätze angelegt.
+            </div>
+
+            <div v-else class="ap-rate-grid">
+              <div
+                v-for="rate in companyRates"
+                :key="rate.id"
+                class="ap-rate-card"
+              >
+                <div class="ap-rate-card-top">
+                  <div class="ap-rate-name">{{ rate.name }}</div>
+                  <div class="ap-rate-actions">
+                    <q-btn
+                      flat
+                      round
+                      dense
+                      size="sm"
+                      icon="edit"
+                      color="grey-7"
+                      @click="openEditRateDialog(rate)"
+                    />
+                    <q-btn
+                      flat
+                      round
+                      dense
+                      size="sm"
+                      icon="delete"
+                      color="negative"
+                      @click="onDeleteRate(rate)"
+                    />
+                  </div>
+                </div>
+                <div class="ap-rate-price">
+                  {{ formatPrice(rate.price) }} €
+                  <span class="ap-rate-unit">/ {{ rate.unit }}</span>
+                </div>
+                <div v-if="rate.note" class="ap-rate-note">{{ rate.note }}</div>
+              </div>
+            </div>
+          </div>
+
+          <div class="ap-panel-footer">
+            <q-btn
+              unelevated
+              color="primary"
+              label="Satz hinzufügen"
+              no-caps
+              icon="add"
+              @click="openAddRateDialog"
+              class="ap-save-btn"
+            />
+          </div>
+        </div>
+
         <!-- MEIN KONTO -->
         <div v-if="tab === 'account'" class="ap-panel">
           <div class="ap-account-hero">
@@ -627,6 +698,69 @@
         </q-card-actions>
       </q-card>
     </q-dialog>
+
+    <!-- Satz-Dialog (Meine Sätze) -->
+    <q-dialog v-model="rateDialogOpen" persistent>
+      <q-card style="width: 460px; max-width: 95vw; border-radius: 16px">
+        <q-card-section class="row items-center q-pb-sm"
+          ><h6 class="q-my-none" style="font-weight: 600; color: #0f172a">
+            {{ editingRateId ? "Satz bearbeiten" : "Neuer Satz" }}
+          </h6>
+          <q-space /><q-btn
+            flat
+            round
+            dense
+            icon="close"
+            color="grey-5"
+            v-close-popup
+        /></q-card-section>
+        <q-card-section class="q-gutter-sm">
+          <q-input
+            v-model="rateForm.name"
+            filled
+            label="Bezeichnung *"
+            hint='z.B. "Minibagger" oder "Facharbeiter"'
+            :rules="[(val) => !!val || 'Pflichtfeld']"
+          />
+          <div class="row q-gutter-sm">
+            <q-input
+              v-model.number="rateForm.price"
+              filled
+              label="Preis *"
+              type="number"
+              suffix="€"
+              class="col"
+              :rules="[(val) => val > 0 || 'Pflichtfeld']"
+            /><q-select
+              v-model="rateForm.unit"
+              filled
+              label="Einheit"
+              :options="rateUnitOptions"
+              use-input
+              new-value-mode="add-unique"
+              class="col"
+            />
+          </div>
+          <q-input
+            v-model="rateForm.note"
+            filled
+            type="textarea"
+            autogrow
+            label="Hinweis für die KI (optional)"
+            hint='z.B. "auch für Bagger bis ca. 12-14 Tonnen"'
+          />
+        </q-card-section>
+        <q-card-actions align="right" class="q-pa-md"
+          ><q-btn flat label="Abbrechen" color="grey" v-close-popup /><q-btn
+            :label="editingRateId ? 'Speichern' : 'Satz anlegen'"
+            color="primary"
+            no-caps
+            icon="save"
+            :loading="savingRate"
+            @click="onSaveRate"
+        /></q-card-actions>
+      </q-card>
+    </q-dialog>
   </q-page>
 </template>
 
@@ -651,6 +785,7 @@ export default {
       { name: "company", label: "Firmendaten", icon: "business" },
       { name: "branding", label: "Branding", icon: "palette" },
       { name: "defaults", label: "Standardwerte", icon: "tune" },
+      { name: "rates", label: "Meine Sätze", icon: "build" },
       { name: "account", label: "Mein Konto", icon: "person" },
     ];
 
@@ -744,6 +879,7 @@ export default {
     onMounted(() => {
       loadCompany();
       loadAiUsage();
+      loadCompanyRates();
     });
 
     const onSave = async () => {
@@ -831,6 +967,101 @@ export default {
 
     const formatDate = (val) =>
       val ? new Date(val).toLocaleDateString("de-DE") : "-";
+
+    const formatPrice = (val) =>
+      Number(val || 0).toLocaleString("de-DE", {
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2,
+      });
+    const rateUnitOptions = ["Std", "Tag", "Pauschale", "km", "Stück", "Tonne"];
+
+    // === Meine Sätze ===
+    const companyRates = ref([]);
+    const ratesLoading = ref(false);
+    const rateDialogOpen = ref(false);
+    const savingRate = ref(false);
+    const editingRateId = ref(null);
+    const rateForm = reactive({
+      name: "",
+      price: null,
+      unit: "Std",
+      note: "",
+    });
+
+    const loadCompanyRates = async () => {
+      ratesLoading.value = true;
+      try {
+        const r = await api.get("/company-rates");
+        companyRates.value = r.data;
+      } catch (e) {
+        $q.notify({
+          type: "negative",
+          message: "Sätze konnten nicht geladen werden",
+        });
+      } finally {
+        ratesLoading.value = false;
+      }
+    };
+
+    const openAddRateDialog = () => {
+      editingRateId.value = null;
+      rateForm.name = "";
+      rateForm.price = null;
+      rateForm.unit = "Std";
+      rateForm.note = "";
+      rateDialogOpen.value = true;
+    };
+
+    const openEditRateDialog = (rate) => {
+      editingRateId.value = rate.id;
+      rateForm.name = rate.name;
+      rateForm.price = Number(rate.price);
+      rateForm.unit = rate.unit;
+      rateForm.note = rate.note || "";
+      rateDialogOpen.value = true;
+    };
+
+    const onSaveRate = async () => {
+      if (!rateForm.name || rateForm.price === null || rateForm.price === "") {
+        $q.notify({ type: "negative", message: "Name und Preis sind Pflicht" });
+        return;
+      }
+      savingRate.value = true;
+      try {
+        if (editingRateId.value) {
+          await api.put(`/company-rates/${editingRateId.value}`, rateForm);
+        } else {
+          await api.post("/company-rates", rateForm);
+        }
+        rateDialogOpen.value = false;
+        await loadCompanyRates();
+        $q.notify({ type: "positive", message: "Satz gespeichert" });
+      } catch (e) {
+        $q.notify({
+          type: "negative",
+          message: e.response?.data?.message || "Fehler beim Speichern",
+        });
+      } finally {
+        savingRate.value = false;
+      }
+    };
+
+    const onDeleteRate = (rate) => {
+      $q.dialog({
+        title: "Satz löschen?",
+        message: `"${rate.name}" wirklich löschen?`,
+        cancel: true,
+        persistent: true,
+      }).onOk(async () => {
+        try {
+          await api.delete(`/company-rates/${rate.id}`);
+          await loadCompanyRates();
+          $q.notify({ type: "positive", message: "Satz gelöscht" });
+        } catch (e) {
+          $q.notify({ type: "negative", message: "Fehler beim Löschen" });
+        }
+      });
+    };
 
     const confirmCancel = ref(false);
     const cancelling = ref(false);
@@ -946,6 +1177,19 @@ export default {
       cancelling,
       onCancelSubscription,
       onReactivate,
+      companyRates,
+      ratesLoading,
+      rateDialogOpen,
+      savingRate,
+      editingRateId,
+      rateForm,
+      rateUnitOptions,
+      formatPrice,
+      loadCompanyRates,
+      openAddRateDialog,
+      openEditRateDialog,
+      onSaveRate,
+      onDeleteRate,
     };
   },
 };
@@ -1106,6 +1350,68 @@ export default {
 }
 .ap-flex {
   flex: 1;
+}
+
+/* Meine Sätze: eigenes Karten-Grid statt der schmalen Label/Control-Zeile
+   - skaliert auch bei 20+ Sätzen sauber, statt zu einer langen Liste mit
+   viel Weißraum zu werden, und der Preis/Hinweis-Text hat mehr Kontrast
+   als der generische, sehr helle .ap-setting-hint. */
+.ap-rate-panel-body {
+  padding: 20px 24px 24px;
+}
+.ap-rate-empty {
+  font-size: 13px;
+  color: #8b90a3;
+  padding: 8px 0 4px;
+}
+.ap-rate-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: 12px;
+}
+.ap-rate-card {
+  border: 1px solid #eceef4;
+  border-radius: 12px;
+  padding: 14px 14px 12px;
+  background: #fafbfd;
+  min-width: 0;
+}
+.ap-rate-card-top {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
+}
+.ap-rate-name {
+  font-size: 14px;
+  font-weight: 700;
+  color: #12121f;
+  line-height: 1.35;
+  word-break: break-word;
+}
+.ap-rate-actions {
+  display: flex;
+  gap: 2px;
+  flex-shrink: 0;
+  margin-top: -4px;
+  margin-right: -6px;
+}
+.ap-rate-price {
+  font-size: 15px;
+  font-weight: 700;
+  color: #1d4ed8;
+  margin-top: 6px;
+}
+.ap-rate-unit {
+  font-size: 12.5px;
+  font-weight: 600;
+  color: #64748b;
+}
+.ap-rate-note {
+  font-size: 12px;
+  color: #5b6472;
+  margin-top: 6px;
+  line-height: 1.5;
 }
 
 .ap-panel-footer {

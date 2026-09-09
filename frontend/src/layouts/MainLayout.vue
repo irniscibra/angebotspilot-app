@@ -22,8 +22,6 @@
       :width="isDrawerExpanded ? 240 : 72"
       class="ap-drawer"
       :class="{ 'is-mini': !isDrawerExpanded }"
-      @mouseenter="isDrawerExpanded = true"
-      @mouseleave="isDrawerExpanded = false"
     >
       <div class="ap-drawer-inner">
         <!-- Logo -->
@@ -40,6 +38,24 @@
             size="32px"
             color="primary"
           />
+        </div>
+
+        <!-- Menü ein-/ausklappen: bewusster Klick statt Hover, damit die
+             Breite nicht mehr von selbst "springt" -->
+        <div class="ap-drawer-toggle-row">
+          <q-btn
+            flat
+            round
+            dense
+            size="sm"
+            :icon="isDrawerExpanded ? 'chevron_left' : 'chevron_right'"
+            class="ap-drawer-toggle-btn"
+            @click="toggleDrawerExpanded"
+          >
+            <q-tooltip>{{
+              isDrawerExpanded ? "Menü einklappen" : "Menü ausklappen"
+            }}</q-tooltip>
+          </q-btn>
         </div>
 
         <!-- Navigation -->
@@ -153,7 +169,28 @@ export default {
     const route = useRoute();
     const leftDrawerOpen = ref(true);
     const showFeedbackDialog = ref(false);
-    const isDrawerExpanded = ref(false);
+
+    // Menü ist standardmaessig immer ausgeklappt (Icons + Text). Der Nutzer
+    // kann es ueber den Toggle-Button bewusst einklappen - das wird gemerkt,
+    // damit es beim naechsten Login/Reload so bleibt wie zuletzt gewaehlt.
+    let savedDrawerState = null;
+    try {
+      savedDrawerState = localStorage.getItem("ap_drawer_expanded");
+    } catch (e) {
+      // localStorage evtl. nicht verfuegbar (z.B. privater Modus) - dann
+      // bleibt es einfach beim Standard (ausgeklappt), kein Fehler noetig.
+    }
+    const isDrawerExpanded = ref(savedDrawerState !== "false");
+
+    const toggleDrawerExpanded = () => {
+      isDrawerExpanded.value = !isDrawerExpanded.value;
+      try {
+        localStorage.setItem("ap_drawer_expanded", String(isDrawerExpanded.value));
+      } catch (e) {
+        // Speichern fehlgeschlagen ist nicht kritisch - Auswahl gilt dann
+        // nur fuer diese Sitzung.
+      }
+    };
 
     // Mitarbeiter (role=employee) bekommen bewusst eine stark reduzierte
     // Navigation - alles andere ist serverseitig ohnehin gesperrt (403),
@@ -211,6 +248,7 @@ export default {
       isActive,
       showFeedbackDialog,
       isDrawerExpanded,
+      toggleDrawerExpanded,
     };
   },
 };
@@ -256,6 +294,22 @@ export default {
   align-items: center;
   justify-content: center;
   min-height: 60px;
+}
+
+.ap-drawer-toggle-row {
+  display: flex;
+  justify-content: flex-end;
+  padding: 0 4px 10px;
+}
+.ap-drawer.is-mini .ap-drawer-toggle-row {
+  justify-content: center;
+}
+.ap-drawer-toggle-btn {
+  color: #8b90a3;
+}
+.ap-drawer-toggle-btn:hover {
+  color: #12121f;
+  background: #f4f5fa;
 }
 
 .ap-nav-list {

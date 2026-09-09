@@ -121,6 +121,11 @@ class Company extends Model
         return $this->hasMany(Material::class);
     }
 
+    public function companyRates()
+    {
+        return $this->hasMany(CompanyRate::class);
+    }
+
     public function services()
     {
         return $this->hasMany(Service::class);

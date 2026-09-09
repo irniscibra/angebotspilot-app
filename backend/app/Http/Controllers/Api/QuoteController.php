@@ -493,6 +493,21 @@ public function send(Request $request, Quote $quote): JsonResponse
      $tradeReferenz = \App\Services\TradeReferenceService::getPrices($trade);
      $andereGewerkeReferenz = \App\Services\TradeReferenceService::getAllPricesExcept($trade);
 
+        // Eigene Sätze der Firma ("Meine Sätze") — gehen vor den allgemeinen
+        // Referenzpreisen, siehe QuoteAIService::buildSystemPrompt() für dieselbe Logik.
+        $ownRates = $quote->company->companyRates()->orderBy('name')->get();
+        $ownRatesSection = '';
+        if ($ownRates->isNotEmpty()) {
+            $ownRatesLines = $ownRates->map(function ($r) {
+                $line = '- ' . $r->name . ': ' . number_format($r->price, 2, ',', '.') . ' EUR/' . $r->unit;
+                if ($r->note) {
+                    $line .= ' (Hinweis: ' . $r->note . ')';
+                }
+                return $line;
+            })->implode("\n");
+            $ownRatesSection = "\n════════════════════════════════════════════\nEIGENE SÄTZE DIESER FIRMA (gehen vor den Referenzpreisen oben!)\n════════════════════════════════════════════\n" . $ownRatesLines . "\nWICHTIG: ein eigener Satz gilt nur als Marktreferenz, wenn Bezeichnung/Größe der zu bewertenden Position wirklich dazu passt (z.B. Hinweis \"bis 12-14 Tonnen\" deckt keinen 18-Tonnen-Bagger ab, auch wenn beides ein \"Bagger\" ist) - bei abweichender Grösse/Art normale Referenzpreise oben verwenden.\n";
+        }
+
         // Regionaler Faktor
         if (str_contains($region, 'sehr hohes Preisniveau')) {
             $regionalerFaktor = 'REGIONAL: +15% auf alle Referenzpreise anwenden (sehr hohes Preisniveau)';
@@ -513,7 +528,7 @@ Region: ' . $region . '
 REFERENZPREISE FÜR ' . strtoupper($tradeLabel) . ' (Deutschland 2024/2025)
 ════════════════════════════════════════════
 ' . $tradeReferenz . '
-
+' . $ownRatesSection . '
 ════════════════════════════════════════════
 REFERENZPREISE ANDERER GEWERKE
 ════════════════════════════════════════════

@@ -10,6 +10,7 @@ use App\Http\Controllers\Api\ProjectReportController;
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\Api\CompanyController;
 use App\Http\Controllers\Api\MaterialController;
+use App\Http\Controllers\Api\CompanyRateController;
 use App\Http\Controllers\Api\PdfController;
 use App\Http\Controllers\Api\DatanormController;
 use App\Http\Controllers\Api\ServiceTemplateController;
@@ -208,6 +209,9 @@ Route::get('/email-verify/{id}/{hash}', [EmailVerificationController::class, 've
     Route::post('/materials/bulk-delete', [MaterialController::class, 'bulkDestroy']);
 // Materialien
 Route::apiResource('materials', MaterialController::class);
+
+// Meine Sätze (firmeneigene Stundensätze/Gerätesätze für die KI)
+Route::apiResource('company-rates', CompanyRateController::class)->only(['index', 'store', 'update', 'destroy']);
 
 // Datanorm Import
     Route::prefix('datanorm')->group(function () {

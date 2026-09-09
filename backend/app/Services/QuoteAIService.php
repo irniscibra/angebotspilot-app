@@ -95,6 +95,10 @@ class QuoteAIService
         // (rein additiv, ändert keine Preise/Mengen/Katalog-Zuordnung)
             $aiResult['groups'] = $this->flagOverpricedMinorMaterials($aiResult['groups']);
 
+        // Sicherheitsnetz: jede Position deterministisch (nicht KI-abhaengig) mit
+        // "Meine Sätze" abgleichen und Preis/Markierung ggf. korrigieren
+            $aiResult['groups'] = $this->enforceOwnRateMatch($aiResult['groups'], $company);
+
       
 
         // Positionen erstellen – mit intelligentem Katalog-Matching
@@ -248,6 +252,61 @@ WICHTIG ZUM KATALOG:
 CATALOG;
         }
 
+        // "Meine Sätze": eigene Stundensätze/Gerätesätze der Firma (z.B. Minibagger
+        // 89€/Std), zusätzlich zu den allgemeinen Gewerke-Referenzpreisen. Anders als
+        // der Materialkatalog gibt es hier KEINEN exakten Artikelabgleich — die KI muss
+        // die Formulierung des Kunden selbst der passenden eigenen Position zuordnen
+        // (deshalb das optionale "Hinweis"-Feld pro Satz).
+        $ownRatesSection = '';
+        $ownRates = $company->companyRates()->orderBy('name')->get();
+        if ($ownRates->isNotEmpty()) {
+            $ownRatesLines = $ownRates->map(function ($r) {
+                $line = "- {$r->name}: " . number_format($r->price, 2, ',', '.') . " EUR/{$r->unit}";
+                if ($r->note) {
+                    $line .= " (Hinweis: {$r->note})";
+                }
+                return $line;
+            })->implode("\n");
+
+            $ownRatesSection = <<<OWNRATES
+
+EIGENE SÄTZE DIESER FIRMA (IMMER bevorzugt verwenden, wenn eine Position dazu passt —
+gehen vor den allgemeinen Referenzpreisen!):
+{$ownRatesLines}
+
+WICHTIG ZU DEN EIGENEN SÄTZEN:
+- Prüfe bei JEDER Position, ob sie zu einem der obigen eigenen Sätze passt — auch bei
+  abweichender Formulierung des Kunden (z.B. "12-Tonnen-Bagger" kann derselbe Satz sein
+  wie "Minibagger", wenn der Hinweis das nahelegt).
+- Wenn ein eigener Satz passt: EXAKT diesen Preis und diese Einheit verwenden, NICHT die
+  allgemeinen Referenzpreise oder eigene Schätzungen.
+- SONDERFALL Gerät/Person mit Satz in "Std" — ABSOLUT VERBINDLICH, HÄUFIGSTER FEHLER:
+  Wenn der passende eigene Satz die Einheit "Std" hat (z.B. ein Gerätesatz wie
+  "Minibagger 89 EUR/Std"), MUSS die zugehörige Position IMMER in "menge" (Anzahl
+  Stunden) und "unit": "Std" ausgedrückt werden. Der hinterlegte Preis ist ein
+  STUNDENSATZ, KEIN Quadrat-/Kubikmeter-/Tonnenpreis — er darf NIEMALS mit einer
+  Flächen-/Volumen-/Gewichtsmenge multipliziert werden, selbst wenn die Zahl "passt".
+  FALSCH (verboten): "Aushub mit Minibagger", menge=400, unit="m³", unit_price=165
+    → ergibt 66.000 EUR, weil 165 EUR/Std fälschlich als 165 EUR/m³ verwendet wurde.
+  RICHTIG: "Aushub mit Minibagger", menge=geschätzte Std (z.B. bei 400m³ und einer
+    Baggerleistung von ca. 5m³/Std sind das ca. 80 Std), unit="Std", unit_price=165
+    → ergibt ca. 13.200 EUR.
+  Prüfe bei JEDER Position mit einem eigenen "Std"-Satz explizit: steht bei "unit"
+  wirklich "Std"? Falls nicht, korrigiere die Position, BEVOR du sie ausgibst.
+- GRENZEN IM HINWEIS SIND VERBINDLICH — NICHT BLIND AUF STICHWORTE MATCHEN: Ein eigener
+  Satz gilt NUR, wenn die vom Kunden beschriebene Größe/Art wirklich in den im Hinweis
+  genannten Bereich passt bzw. der Kunde nicht ausdrücklich ein ANDERES Gerät/Person
+  nennt. Wenn der Kunde z.B. eine Größe außerhalb des im Hinweis genannten Bereichs
+  nennt (Hinweis "bis ca. 12-14 Tonnen", Kunde nennt aber einen 18-Tonnen-Bagger) oder
+  ausdrücklich sagt, dass es NICHT das im Satz gemeinte Gerät ist ("nicht der
+  Minibagger"), dann gilt dieser eigene Satz für diese Position NICHT — auch nicht für
+  davon abhängige Positionen wie Anfahrt/Abfahrt mit demselben Gerät. Schätze in diesem
+  Fall einen eigenen, angemessenen Preis wie ohne "Meine Sätze" (typischerweise höher,
+  da größeres Gerät). Ein bloßes Vorkommen des Wortes "Bagger" reicht NICHT als Treffer
+  — die konkrete Größe/Bezeichnung muss zum Satz passen.
+OWNRATES;
+        }
+
         return <<<PROMPT
 Du bist ein erfahrener Handwerksmeister und Kalkulator in Deutschland.
 Erstelle aus der Projektbeschreibung ein detailliertes, professionelles Angebot.
@@ -257,6 +316,7 @@ FIRMENDATEN:
 - MwSt-Satz: {$vatRate}%
 - Standort: Deutschland
 {$catalogSection}
+{$ownRatesSection}
 
 REGELN FÜR DIE KALKULATION:
 0. HÖCHSTE PRIORITÄT — VERBINDLICH, KEINE AUSNAHME: Wenn der Nutzer in der
@@ -469,6 +529,18 @@ PROMPT;
                     $description = trim(
                         ($description ? $description . ' ' : '') .
                         '⚠ Pauschalpreis – bitte prüfen, ob alle Materialien realistisch mit eingerechnet sind.'
+                    );
+                } elseif (!empty($item['own_rate_unit_mismatch'])) {
+                    $rateName = $item['own_rate_unit_mismatch_name'] ?? '';
+                    $description = trim(
+                        ($description ? $description . ' ' : '') .
+                        "🔴 ACHTUNG: Diese Position gehört zu deinem Satz \"{$rateName}\" (Meine Sätze), die Einheit passt aber nicht dazu (z.B. Stundensatz falsch als Flächen-/Volumenpreis verwendet) – Preis wurde auf 0 gesetzt, bitte Menge/Einheit korrigieren!"
+                    );
+                } elseif (!empty($item['own_rate_auto_corrected'])) {
+                    $rateName = $item['own_rate_auto_corrected_name'] ?? '';
+                    $description = trim(
+                        ($description ? $description . ' ' : '') .
+                        "✓ Preis automatisch auf deinen hinterlegten Satz \"{$rateName}\" (Meine Sätze) korrigiert."
                     );
                 }
 
@@ -808,6 +880,191 @@ private function enforceMinimumPrices(array $groups): array
                             'share_of_material_total' => round($share, 2),
                         ]);
                     }
+                }
+            }
+        }
+        unset($group, $item);
+
+        return $groups;
+    }
+
+    /**
+     * Sicherheitsnetz: erkennt, wenn die KI einen "Meine Sätze"-Stundensatz
+     * (z.B. "Minibagger 89 EUR/Std") zwar preislich korrekt übernommen, aber
+     * NICHT als Stundenmenge verwendet hat, sondern fälschlich mit einer
+     * Flächen-/Volumen-/Gewichtsmenge multipliziert (z.B. 400m³ × 165 statt
+     * geschätzte Std × 165). Das kann zu massiv überhöhten Positionen führen.
+     * Ändert NIEMALS selbst Preis/Menge/Einheit (das wäre reines Raten ohne
+     * verlässliche Grundlage) - markiert nur sichtbar zur Prüfung, genau wie
+     * flagVaguePauschalMaterials()/flagOverpricedMinorMaterials().
+     */
+    /**
+     * Normalisiert eine Einheit fuer den Vergleich - insbesondere "pauschal"
+     * (Einheiten-Vokabular der KI, siehe buildSystemPrompt) und "Pauschale"
+     * (Auswahlwert im "Meine Sätze"-Dialog in SettingsPage.vue) sollen als
+     * gleich gelten, obwohl sie sich in der Schreibweise unterscheiden.
+     */
+    private function normalizeUnitForCompare(string $unit): string
+    {
+        $u = strtolower(trim($unit));
+        return $u === 'pauschale' ? 'pauschal' : $u;
+    }
+
+    /**
+     * Extrahiert die erste im Text genannte Tonnenzahl (z.B. aus
+     * "22-Tonnen-Bagger" oder "18 Tonnen Bagger") als Einzelwert.
+     */
+    private function extractTonnagePoint(string $text): ?float
+    {
+        if (preg_match('/(\d+(?:[.,]\d+)?)\s*-?\s*tonnen/iu', $text, $m)) {
+            return (float) str_replace(',', '.', $m[1]);
+        }
+        return null;
+    }
+
+    /**
+     * Extrahiert einen Tonnen-Größenbereich aus Namen/Hinweis eines eigenen
+     * Satzes, z.B. "bis ca. 12-14 Tonnen" -> [0, 14], "über 20 Tonnen" ->
+     * [20, INF], "15-20 Tonnen" -> [15, 20]. Reihenfolge wichtig: "bis"/
+     * "über" zuerst pruefen, sonst wuerde "bis 12-14 Tonnen" faelschlich als
+     * einfacher Bereich 12-14 statt als Obergrenze 14 interpretiert.
+     */
+    private function extractTonnageRange(string $text): ?array
+    {
+        if (preg_match('/bis\s*(?:ca\.?\s*)?(\d+(?:[.,]\d+)?)(?:\s*[-–]\s*(\d+(?:[.,]\d+)?))?\s*-?\s*tonnen/iu', $text, $m)) {
+            $max = (isset($m[2]) && $m[2] !== '') ? (float) str_replace(',', '.', $m[2]) : (float) str_replace(',', '.', $m[1]);
+            return [0.0, $max];
+        }
+        if (preg_match('/(?:über|ueber|ab)\s*(?:ca\.?\s*)?(\d+(?:[.,]\d+)?)\s*-?\s*tonnen/iu', $text, $m)) {
+            return [(float) str_replace(',', '.', $m[1]), INF];
+        }
+        if (preg_match('/(\d+(?:[.,]\d+)?)\s*[-–]\s*(\d+(?:[.,]\d+)?)\s*-?\s*tonnen/iu', $text, $m)) {
+            return [(float) str_replace(',', '.', $m[1]), (float) str_replace(',', '.', $m[2])];
+        }
+        return null;
+    }
+
+    /**
+     * Sicherheitsnetz (deterministisch, unabhängig davon, ob die KI die
+     * Prompt-Anweisungen zu "Meine Sätze" befolgt hat): ordnet jede Position
+     * per Code - nicht per KI-Einschätzung - dem passenden eigenen Satz zu,
+     * ueber zwei Signale:
+     * 1. Name des eigenen Satzes taucht (fast) wörtlich in Titel/Beschreibung
+     *    der Position auf - eindeutigstes Signal (z.B. "Minibagger",
+     *    "An-/Abfahrt mit Minibagger").
+     * 2. Falls kein Namens-Treffer: die im Text genannte Tonnage (z.B.
+     *    "22-Tonnen-Bagger") wird gegen den im Namen/Hinweis hinterlegten
+     *    Größenbereich der eigenen Geräte-Sätze abgeglichen. Transport-
+     *    Pauschalen (Name enthält "fahrt") werden hier bewusst ausgenommen,
+     *    damit z.B. "über ca. 14 Tonnen" im Hinweis einer Anfahrt-Pauschale
+     *    nicht mit einer Aushub-Position kollidiert.
+     * Nur bei GENAU EINEM eindeutigen Treffer wird korrigiert - bei 0 oder
+     * mehreren Kandidaten wird bewusst NICHTS erzwungen (kein Raten).
+     *
+     * Korrektur-Logik: passt die Einheit des eigenen Satzes zur Einheit der
+     * Position, wird der Preis direkt korrigiert (Menge bleibt unangetastet).
+     * Passt die Einheit NICHT (typischerweise Std-Satz vs. m²/m³/Tonne-
+     * Position), kennen wir die korrekte Menge nicht - dann wird der Preis
+     * auf 0 gesetzt und die Position deutlich markiert, statt eine plausibel
+     * aussehende, aber falsche (meist massiv zu hohe) Summe stehen zu lassen.
+     */
+    private function enforceOwnRateMatch(array $groups, Company $company): array
+    {
+        $ownRates = $company->companyRates()->get();
+        if ($ownRates->isEmpty()) {
+            return $groups;
+        }
+
+        foreach ($groups as &$group) {
+            foreach ($group['items'] as &$item) {
+                if (($item['type'] ?? '') === 'text') {
+                    continue;
+                }
+
+                $itemText = strtolower(trim(($item['title'] ?? '') . ' ' . ($item['description'] ?? '')));
+                if ($itemText === '') {
+                    continue;
+                }
+
+                $matchedRate = null;
+
+                // Bei mehreren Namens-Treffern (z.B. "Minibagger" UND "An-/Abfahrt
+                // mit Minibagger" stecken beide als Teilstring in "An-/Abfahrt mit
+                // Minibagger") gewinnt der LAENGSTE, also spezifischste Name - sonst
+                // haengt das Ergebnis zufaellig von der Datenbank-Reihenfolge der
+                // Sätze ab, was genau die falsche Zuordnung verursachen kann.
+                $bestNameLen = 0;
+                foreach ($ownRates as $rate) {
+                    $rateName = strtolower(trim($rate->name));
+                    $rateNameLen = mb_strlen($rateName);
+                    if ($rateNameLen >= 4 && str_contains($itemText, $rateName) && $rateNameLen > $bestNameLen) {
+                        $matchedRate = $rate;
+                        $bestNameLen = $rateNameLen;
+                    }
+                }
+
+                if (!$matchedRate) {
+                    $itemTonnage = $this->extractTonnagePoint($itemText);
+                    if ($itemTonnage !== null) {
+                        // Transport-Positionen (Titel/Beschreibung enthält "fahrt", z.B.
+                        // "An-/Abfahrt...") duerfen nur gegen Transport-Pauschalen (Satz-
+                        // Name enthält ebenfalls "fahrt") gematcht werden, und umgekehrt
+                        // Aushub-/Geräte-Positionen nur gegen Nicht-Transport-Sätze - sonst
+                        // koennte z.B. eine Anfahrt-Position faelschlich einen Geräte-
+                        // Stundensatz matchen (oder umgekehrt), nur weil beide dieselbe
+                        // Tonnenzahl im Text erwähnen.
+                        $itemIsFahrt = str_contains($itemText, 'fahrt');
+                        $candidates = [];
+                        foreach ($ownRates as $rate) {
+                            $rateIsFahrt = str_contains(strtolower($rate->name), 'fahrt');
+                            if ($itemIsFahrt !== $rateIsFahrt) {
+                                continue;
+                            }
+                            $rangeText = strtolower(trim($rate->name . ' ' . ($rate->note ?? '')));
+                            $range = $this->extractTonnageRange($rangeText);
+                            if ($range && $itemTonnage >= $range[0] && $itemTonnage <= $range[1]) {
+                                $candidates[] = $rate;
+                            }
+                        }
+                        if (count($candidates) === 1) {
+                            $matchedRate = $candidates[0];
+                        }
+                    }
+                }
+
+                if (!$matchedRate) {
+                    continue;
+                }
+
+                $currentPrice = round((float) ($item['unit_price'] ?? 0), 2);
+                $ratePrice = round((float) $matchedRate->price, 2);
+                $itemUnit = $this->normalizeUnitForCompare($item['unit'] ?? '');
+                $rateUnit = $this->normalizeUnitForCompare($matchedRate->unit);
+
+                if (abs($currentPrice - $ratePrice) < 0.01 && $itemUnit === $rateUnit) {
+                    continue;
+                }
+
+                if ($itemUnit === $rateUnit) {
+                    $item['unit_price'] = $ratePrice;
+                    $item['own_rate_auto_corrected'] = true;
+                    $item['own_rate_auto_corrected_name'] = $matchedRate->name;
+                    Log::warning('Eigener Satz automatisch korrigiert (Einheit passte, Preis nicht)', [
+                        'title' => $item['title'] ?? null,
+                        'rate_name' => $matchedRate->name,
+                        'old_price' => $currentPrice,
+                        'new_price' => $ratePrice,
+                    ]);
+                } else {
+                    $item['unit_price'] = 0;
+                    $item['own_rate_unit_mismatch'] = true;
+                    $item['own_rate_unit_mismatch_name'] = $matchedRate->name;
+                    Log::warning('Eigener Satz erkannt, aber Einheit passt nicht - Preis auf 0 gesetzt', [
+                        'title' => $item['title'] ?? null,
+                        'rate_name' => $matchedRate->name,
+                        'rate_unit' => $matchedRate->unit,
+                        'item_unit' => $item['unit'] ?? null,
+                    ]);
                 }
             }
         }

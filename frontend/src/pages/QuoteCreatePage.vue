@@ -1501,6 +1501,12 @@
                       class="q-mt-xs q-ml-xs"
                       style="font-size: 10px"
                     />
+                    <div
+                      v-if="item.description"
+                      :style="itemDescriptionStyle(item.description)"
+                    >
+                      {{ item.description }}
+                    </div>
                   </div>
                   <template v-if="item.type !== 'text'">
                     <div
@@ -1534,6 +1540,28 @@
         </div>
 
         <div class="col-12 col-md-4">
+          <q-banner
+            v-if="unpricedCount > 0"
+            rounded
+            class="q-mb-md"
+            style="
+              background: #fff7ed;
+              border: 1px solid #fed7aa;
+              border-radius: 12px;
+            "
+          >
+            <template v-slot:avatar
+              ><q-icon name="error" color="orange-8"
+            /></template>
+            <div style="font-size: 13px; font-weight: 700; color: #9a3412">
+              {{ unpricedCount }} von {{ pricableItemsCount }} Positionen ohne
+              Preis
+            </div>
+            <div style="font-size: 12px; color: #c2410c; margin-top: 2px">
+              Bitte vor dem Versenden in "Angebot bearbeiten" ergänzen.
+            </div>
+          </q-banner>
+
           <q-card
             flat
             style="
@@ -1968,6 +1996,22 @@ export default {
       return result;
     });
 
+    const unpricedCount = computed(() => {
+      if (!quoteStore.currentQuote?.items) return 0;
+      return quoteStore.currentQuote.items.filter(
+        (i) =>
+          i.type !== "text" && (!i.unit_price || Number(i.unit_price) === 0),
+      ).length;
+    });
+
+    // Nenner für die "X von Y Positionen ohne Preis"-Anzeige: Überschriften
+    // zaehlen nicht mit, die haben nie einen eigenen Preis.
+    const pricableItemsCount = computed(() => {
+      if (!quoteStore.currentQuote?.items) return 0;
+      return quoteStore.currentQuote.items.filter((i) => i.type !== "text")
+        .length;
+    });
+
     const itemTypeMeta = (item) => {
       switch (item.type) {
         case "material":
@@ -1981,6 +2025,24 @@ export default {
         default:
           return { color: "grey", label: item.type };
       }
+    };
+
+    // Beschreibung/Hinweistext unter jeder Position: Sicherheitsnetz-Warnungen
+    // (🔴 falsche Zuordnung, ⚠ sonstiger Hinweis, ✓ automatisch korrigiert)
+    // muessen deutlich lesbar sein, nicht nur als blasse Randnotiz.
+    const itemDescriptionStyle = (description) => {
+      const base = "font-size: 11px; margin-top: 4px;";
+      if (!description) return base + " color: #64748b;";
+      if (description.includes("🔴")) {
+        return base + " color: #b42318; font-weight: 600;";
+      }
+      if (description.includes("⚠")) {
+        return base + " color: #92400e; font-weight: 600;";
+      }
+      if (description.includes("✓")) {
+        return base + " color: #15803d; font-weight: 500;";
+      }
+      return base + " color: #64748b;";
     };
 
     const itemCardStyle = (item) => {
@@ -2465,7 +2527,10 @@ export default {
       emptyTitle,
       itemCount,
       groupedItems,
+      unpricedCount,
+      pricableItemsCount,
       itemTypeMeta,
+      itemDescriptionStyle,
       itemCardStyle,
       formatPrice,
       filterCustomers,
