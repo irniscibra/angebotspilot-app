@@ -151,6 +151,7 @@ class QuoteController extends Controller
             'footer_text' => 'nullable|string',
             'terms_text' => 'nullable|string',
             'internal_notes' => 'nullable|string',
+            'status' => 'sometimes|in:draft,sent,accepted,rejected',
         ]);
 
         $quote->update($request->only([
@@ -166,6 +167,29 @@ class QuoteController extends Controller
             'terms_text',
             'internal_notes',
         ]));
+
+        // Status-Wechsel separat behandeln (war zuvor ein Bug: 'status' fehlte
+        // oben im $request->only([...]) - Speichern gab "erfolgreich" zurueck,
+        // aenderte den Status in der DB aber nie). Beim ERSTEN Wechsel in einen
+        // Status wird zusaetzlich der passende Zeitstempel gesetzt (analog zu
+        // Quote::markAsSent() bzw. der automatischen Kunden-Annahme in
+        // PublicQuoteController) - ein bereits gesetzter Zeitstempel wird dabei
+        // NICHT ueberschrieben, z.B. wenn der Kunde online schon angenommen hat
+        // und hier nur nochmal derselbe Status gespeichert wird.
+        if ($request->has('status') && $request->input('status') !== $quote->status) {
+            $newStatus = $request->input('status');
+            $statusUpdate = ['status' => $newStatus];
+
+            if ($newStatus === 'sent' && !$quote->sent_at) {
+                $statusUpdate['sent_at'] = now();
+            } elseif ($newStatus === 'accepted' && !$quote->accepted_at) {
+                $statusUpdate['accepted_at'] = now();
+            } elseif ($newStatus === 'rejected' && !$quote->rejected_at) {
+                $statusUpdate['rejected_at'] = now();
+            }
+
+            $quote->update($statusUpdate);
+        }
 
         // Neu kalkulieren falls Rabatt geändert
         if ($request->has('discount_percent')) {

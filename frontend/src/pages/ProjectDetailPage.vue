@@ -283,6 +283,82 @@
         </q-card-section>
       </q-card>
 
+      <!-- Nachkalkulation: kalkulierte vs. tatsaechlich erfasste Stunden -->
+      <q-card
+        v-if="project.quotes?.length"
+        flat
+        class="q-mt-lg"
+        style="border: 1px solid #e2e8f0; border-radius: 18px; background: #ffffff"
+      >
+        <q-card-section class="q-pa-lg">
+          <div class="ap-section-title q-mb-md">
+            <q-icon name="fact_check" size="18px" color="#64748b" class="q-mr-xs" />
+            Nachkalkulation
+          </div>
+
+          <div v-if="!nachkalkulation || !nachkalkulation.has_quote_basis" class="ap-empty-card">
+            <q-icon name="fact_check" size="28px" color="#c6cad9" />
+            <div class="ap-empty-text">
+              Noch keine Nachkalkulation moeglich – dafuer braucht es ein angenommenes
+              Angebot mit mindestens einer Stunden-Position in diesem Projekt.
+            </div>
+          </div>
+
+          <div v-else class="row q-col-gutter-lg">
+            <div class="col-6 col-sm-3">
+              <div class="cost-stat-label">Kalkulierte Std.</div>
+              <div class="cost-stat-value" style="color: #0f172a">
+                {{ nachkalkulation.planned_hours }} Std
+              </div>
+            </div>
+            <div class="col-6 col-sm-3">
+              <div class="cost-stat-label">Erfasste Std.</div>
+              <div class="cost-stat-value" style="color: #1d4ed8">
+                {{ nachkalkulation.actual_hours }} Std
+              </div>
+              <div v-if="!nachkalkulation.has_time_entries" class="cost-stat-caption">
+                noch keine Zeit erfasst
+              </div>
+            </div>
+            <div class="col-6 col-sm-3">
+              <div class="cost-stat-label">Differenz</div>
+              <div
+                class="cost-stat-value"
+                :style="{ color: nachkalkulation.delta_hours > 0 ? '#dc2626' : '#15803d' }"
+              >
+                {{ nachkalkulation.delta_hours > 0 ? "+" : "" }}{{ nachkalkulation.delta_hours }} Std
+              </div>
+              <div class="cost-stat-caption">
+                {{ nachkalkulation.delta_percent > 0 ? "+" : "" }}{{ nachkalkulation.delta_percent }} %
+                gegenueber Kalkulation
+              </div>
+            </div>
+            <div class="col-6 col-sm-3">
+              <div class="cost-stat-label">Effektiver Stundensatz</div>
+              <div
+                class="cost-stat-value"
+                :style="{
+                  color:
+                    nachkalkulation.effective_hourly_rate == null ||
+                    nachkalkulation.effective_hourly_rate >= nachkalkulation.planned_hourly_rate
+                      ? '#15803d'
+                      : '#dc2626',
+                }"
+              >
+                {{
+                  nachkalkulation.effective_hourly_rate == null
+                    ? "–"
+                    : formatPrice(nachkalkulation.effective_hourly_rate) + " €"
+                }}
+              </div>
+              <div class="cost-stat-caption">
+                kalkuliert: {{ formatPrice(nachkalkulation.planned_hourly_rate) }} €/Std
+              </div>
+            </div>
+          </div>
+        </q-card-section>
+      </q-card>
+
       <!-- Angebote -->
       <div class="row items-center q-mt-lg q-mb-sm">
         <div class="ap-section-title">
@@ -1300,6 +1376,7 @@ export default {
         timeEntryDialog.show = false;
         $q.notify({ type: "positive", message: "Zeit erfasst" });
         await loadProject();
+        if (isAdmin.value) loadNachkalkulation();
       } catch (e) {
         $q.notify({
           type: "negative",
@@ -1322,6 +1399,7 @@ export default {
           timeEntryDialog.show = false;
           $q.notify({ type: "positive", message: "Zeiteintrag gelöscht" });
           await loadProject();
+          if (isAdmin.value) loadNachkalkulation();
         } catch (e) {
           $q.notify({
             type: "negative",
@@ -1380,6 +1458,7 @@ export default {
       if (isAdmin.value) {
         loadAssignments();
         loadTeamMembers();
+        loadNachkalkulation();
       }
     });
 
@@ -1720,6 +1799,20 @@ export default {
       });
     };
 
+    // ---- Nachkalkulation: kalkulierte vs. tatsaechlich erfasste Stunden ----
+    // Rein additiv, eigener Endpunkt (nicht Teil von loadProject()/show()),
+    // damit ein Fehler hier niemals die restliche Projektseite betrifft.
+    const nachkalkulation = ref(null);
+
+    const loadNachkalkulation = async () => {
+      try {
+        const response = await api.get(`/projects/${route.params.id}/nachkalkulation`);
+        nachkalkulation.value = response.data;
+      } catch (error) {
+        console.error("Nachkalkulation konnte nicht geladen werden", error);
+      }
+    };
+
     // ---- Kosten-Übersicht: Plan (Angebot) vs. Ist (Ausgaben) ----
     const costOverview = computed(() => {
       const quotesTotal = (project.value?.quotes || [])
@@ -1948,6 +2041,7 @@ export default {
       onSaveExpense,
       onDeleteExpense,
       costOverview,
+      nachkalkulation,
       truncateText,
       photoViewer,
       openPhotoViewer,

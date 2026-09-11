@@ -116,6 +116,66 @@ class ProjectController extends Controller
     }
 
     /**
+     * Nachkalkulation: vergleicht die im angenommenen Angebot kalkulierten
+     * Arbeitsstunden (Positionen vom Typ "labor" mit einer Std-Einheit) mit
+     * den tatsaechlich erfassten Stunden aus der Zeiterfassung dieses
+     * Projekts. Rein lesend - aendert nichts an Angebots-/Rechnungs-/
+     * Kosten-Berechnungen. Route liegt im role:owner,admin-Block (siehe
+     * routes/api.php), Mitarbeiter erreichen diesen Endpunkt also gar
+     * nicht - authorizeProjectAccess() bleibt trotzdem als zweite Ebene
+     * fuer das Firmen-Scoping bestehen (analog zu den anderen Methoden
+     * hier in diesem Controller).
+     */
+    public function nachkalkulation(Request $request, Project $project): JsonResponse
+    {
+        $this->authorizeProjectAccess($request, $project);
+
+        $acceptedQuoteIds = $project->quotes()
+            ->where('status', 'accepted')
+            ->pluck('id');
+
+        $laborItems = $acceptedQuoteIds->isEmpty()
+            ? collect()
+            : \App\Models\QuoteItem::whereIn('quote_id', $acceptedQuoteIds)
+                ->where('type', 'labor')
+                ->get()
+                ->filter(fn ($item) => str_contains(strtolower($item->unit ?? ''), 'std'));
+
+        $plannedHours = round((float) $laborItems->sum('quantity'), 2);
+        $plannedLaborCost = round((float) $laborItems->sum('total_price'), 2);
+
+        $actualMinutes = (int) $project->timeEntries()->get()->sum('duration_minutes');
+        $actualHours = round($actualMinutes / 60, 2);
+
+        $hasQuoteBasis = $acceptedQuoteIds->isNotEmpty() && $plannedHours > 0;
+
+        $deltaHours = $hasQuoteBasis ? round($actualHours - $plannedHours, 2) : null;
+        $deltaPercent = ($hasQuoteBasis && $plannedHours > 0)
+            ? round(($deltaHours / $plannedHours) * 100, 1)
+            : null;
+
+        $plannedHourlyRate = ($hasQuoteBasis && $plannedHours > 0)
+            ? round($plannedLaborCost / $plannedHours, 2)
+            : null;
+
+        $effectiveHourlyRate = ($hasQuoteBasis && $actualHours > 0)
+            ? round($plannedLaborCost / $actualHours, 2)
+            : null;
+
+        return response()->json([
+            'has_quote_basis' => $hasQuoteBasis,
+            'has_time_entries' => $actualHours > 0,
+            'planned_hours' => $plannedHours,
+            'planned_labor_cost' => $plannedLaborCost,
+            'actual_hours' => $actualHours,
+            'delta_hours' => $deltaHours,
+            'delta_percent' => $deltaPercent,
+            'planned_hourly_rate' => $plannedHourlyRate,
+            'effective_hourly_rate' => $effectiveHourlyRate,
+        ]);
+    }
+
+    /**
      * Projekt aktualisieren.
      */
     public function update(Request $request, Project $project): JsonResponse

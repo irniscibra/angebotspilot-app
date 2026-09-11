@@ -177,6 +177,10 @@ Route::get('/email-verify/{id}/{hash}', [EmailVerificationController::class, 've
     Route::put('projects/{project}/expenses/{expense}', [ProjectExpenseController::class, 'update']);
     Route::delete('projects/{project}/expenses/{expense}', [ProjectExpenseController::class, 'destroy']);
 
+    // Nachkalkulation (kalkulierte vs. tatsaechlich erfasste Stunden) -
+    // enthaelt Margendaten-nahe Auswertung, bewusst nicht fuer Mitarbeiter
+    Route::get('projects/{project}/nachkalkulation', [ProjectController::class, 'nachkalkulation']);
+
     // Projekt-Zuweisungen (wer darf als Mitarbeiter auf dieses Projekt zugreifen)
     Route::get('projects/{project}/assignments', [ProjectAssignmentController::class, 'index']);
     Route::post('projects/{project}/assignments', [ProjectAssignmentController::class, 'store']);
